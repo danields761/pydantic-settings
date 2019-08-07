@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pytest import mark
 
-from pydantic_settings.loaders import json
+import pydantic_settings.loaders.json
+from pydantic_settings.loaders import json, common
 
 
-_create = json.ASTItem.create
+_create = pydantic_settings.loaders.json.ASTItem.create
 
 
 JSON_LIST = """[
@@ -24,40 +25,34 @@ JSON_LIST_DICT = """[
     [
         (
             JSON_LIST,
-            _create([_create(12345, 2, 5, 2, 10), _create(54321, 2, 12, 2, 17)], 1, 1, 3, 1),
+            _create(
+                1, 1, 3, 2, [_create(2, 5, 2, 10, 12345), _create(2, 12, 2, 17, 54321)]
+            ),
         ),
         (
             JSON_LIST_DICT,
             _create(
-                [_create({'key': _create(12345, 3, 16, 3, 21)}, 2, 5, 4, 5)],
-                1,
-                1,
-                5,
-                1,
+                1, 1, 5, 2, [_create(2, 5, 4, 6, {'key': _create(3, 16, 3, 21, 12345)})]
             ),
         ),
-        ('105', _create(105, 1, 1, 1, 3)),
-        ('106.5', _create(106.5, 1, 1, 1, 5)),
-        ('false', _create(False, 1, 1, 1, 5)),
-        ('true', _create(True, 1, 1, 1, 4)),
-        ('null', _create(None, 1, 1, 1, 4)),
-        ('[]', _create([], 1, 1, 1, 2)),
+        ('105', _create(1, 1, 1, 4, 105)),
+        ('106.5', _create(1, 1, 1, 6, 106.5)),
+        ('false', _create(1, 1, 1, 6, False)),
+        ('true', _create(1, 1, 1, 5, True)),
+        ('null', _create(1, 1, 1, 5, None)),
+        ('[]', _create(1, 1, 1, 3, [])),
         (
             '[12, 23]',
-            _create([_create(12, 1, 1, 1, 3), _create(23, 1, 5, 1, 7)], 1, 1, 1, 8),
+            _create(1, 1, 1, 9, [_create(1, 2, 1, 4, 12), _create(1, 6, 1, 8, 23)]),
         ),
         (
             '[{"key": 12345}]',
             _create(
-                [_create({'key': _create(12345, 1, 9, 1, 14)}, 1, 2, 1, 15)],
-                1,
-                1,
-                1,
-                16,
+                1, 1, 1, 17, [_create(1, 2, 1, 16, {'key': _create(1, 10, 1, 15, 12345)})]
             ),
         ),
-        ('{}', _create({}, 1, 1, 1, 2)),
-        ('{"key": 1}', _create({'key': _create(1, 1, 8, 1, 9)}, 1, 1, 1, 10)),
+        ('{}', _create(1, 1, 1, 3, {})),
+        ('{"key": 1}', _create(1, 1, 1, 11, {'key': _create(1, 9, 1, 10, 1)})),
     ],
 )
 def test_json_ast1(in_val, out_val):

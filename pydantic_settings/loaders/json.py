@@ -4,42 +4,29 @@ import json
 import json.scanner
 from functools import partial, wraps
 
+from typing import Tuple, Callable, Any, List, Union
+
 from attr import dataclass
-from typing import Tuple, Callable, Any
 
 from ..types import Json
-from .common import Location
+from .common import Location, ASTTreeRoot
 
 
-@dataclass
-class ASTItem:
-    location: Location
-    value: Json
-
-    @classmethod
-    def create(
-        cls, val: Json, line: int, col: int, end_line: int, end_col: int
-    ) -> ASTItem:
-        return ASTItem(Location(line, col, end_line, end_col), val)
+def _rfind(s: str, sym: str, start: int = None, end: int = None) -> int:
+    res = s.rfind(sym, start, end)
+    return res
 
 
-_CreateObjRoutineType = Callable[[str, int, bool, Callable], Tuple[Json, int]]
-_CreateASTObjRoutineType = Callable[[str, int, bool, Callable], Tuple[ASTItem, int]]
-
-
-def _create_object_hook_for_type(original_value):
+def _create_object_hook(original_value):
+    @wraps(original_value)
     def routine(
         s_with_end: Tuple[str, int], *args: Any, **kwargs: Any
     ) -> Tuple[ASTItem, int]:
         s, end = s_with_end
         value, new_end = original_value(s_with_end, *args, **kwargs)
 
-        col = end - _rfind(s, '\n', None, end)
-        if col == 0:
-            col = 1
-        end_col = new_end - _rfind(s, '\n', None, new_end)
-        if end_col == 0:
-            end_col = 1
+        col = end - _rfind(s, '\n', None, end - 1) - 1
+        end_col = new_end - _rfind(s, '\n', None, new_end - 1)
 
         return (
             ASTItem(
@@ -57,11 +44,16 @@ def _create_object_hook_for_type(original_value):
     return routine
 
 
-def _rfind(s: str, sym: str, start: int = None, end: int = None) -> int:
-    res = s.rfind(sym, start, end)
-    if res == -1:
-        return 0
-    return res
+@dataclass
+class ASTItem:
+    location: Location
+    value: Json
+
+    @classmethod
+    def create(
+        cls, line: int, col: int, end_line: int, end_col: int, val: Json
+    ) -> ASTItem:
+        return ASTItem(Location(line, col, end_line, end_col), val)
 
 
 def _create_scanner_wrapper(
@@ -76,8 +68,6 @@ def _create_scanner_wrapper(
         line = s.count('\n', None, idx) + 1
         newline_from_left = _rfind(s, '\n', None, idx)
         col = idx - newline_from_left
-        if col == 0:
-            col = 1
         end_col = end - newline_from_left
 
         is_supported = val is None or isinstance(val, (int, float, bool))
@@ -97,9 +87,9 @@ class ASTDecoder(json.JSONDecoder):
 
         super().__init__()
 
-        self.parse_object = _create_object_hook_for_type(JSONObject)
-        self.parse_array = _create_object_hook_for_type(JSONArray)
-        str_parser_wrapper = _create_object_hook_for_type(scanstring)
+        self.parse_object = _create_object_hook(JSONObject)
+        self.parse_array = _create_object_hook(JSONArray)
+        str_parser_wrapper = _create_object_hook(scanstring)
         self.parse_string = lambda s, end, strict: str_parser_wrapper(
             (s, end),
             lambda s_with_end, strict_: scanstring(
@@ -130,3 +120,42 @@ class ASTDecoder(json.JSONDecoder):
 
 load = partial(json.load, cls=ASTDecoder)
 loads = partial(json.loads, cls=ASTDecoder)
+
+
+class _ASTTreeRoot(ASTTreeRoot):
+    def __init__(self, root_item: ASTItem):
+        self.root_item = root_item
+
+    def lookup_key_loc(self, key: List[Union[str, int]]) -> Location:
+        curr_item = self.root_item
+        for i, key_part in enumerate(key):
+            if isinstance(key, int):
+                if not isinstance(curr_item.value, list):
+                    raise ValueError()
+                curr_item = curr_item.value[key_part]
+            else:
+                if not isinstance(curr_item.value, dict):
+                    raise ValueError()
+                curr_item = curr_item.value[key_part]
+
+        return curr_item.location
+
+
+def as_tree(load_result: Any) -> ASTTreeRoot:
+    if not isinstance(load_result, ASTItem):
+        raise ValueError(f'you should pass result of "load" or "loads" here, not {type(load_result)} type')
+
+    return _ASTTreeRoot(load_result)
+
+
+# check that json module is compatible with out implementation
+def _check_capability():
+    try:
+        ASTDecoder()
+    except ValueError as e:
+        if 'probably their internals has been changed' in str(e):
+            raise ImportError(str(e))
+        raise
+
+
+_check_capability()

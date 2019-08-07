@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pydantic-settings"
+name = "pydantic-settings"  # HUY
 version = "0.1.0"
 description = "Hipster-orgazmic tool to mange application settings"
 authors = ["Daniel Daniels <danields761@gmail.com>"]
