@@ -4,12 +4,19 @@ import json
 import json.scanner
 from functools import partial, wraps
 
-from typing import Tuple, Callable, Any, List, Union
+from typing import Tuple, Callable, Any, List, Union, TextIO, Dict
 
 from attr import dataclass
 
 from ..types import Json
-from .common import Location, ASTTreeRoot
+from .common import (
+    Location,
+    LocationFinder,
+    Document,
+    KeyLookupError,
+    MappingExpectError,
+    ListExpectError,
+)
 
 
 def _rfind(s: str, sym: str, start: int = None, end: int = None) -> int:
@@ -47,13 +54,20 @@ def _create_object_hook(original_value):
 @dataclass
 class ASTItem:
     location: Location
-    value: Json
+    value: Union[float, int, str, List[ASTItem], Dict[str, ASTItem]]
 
     @classmethod
     def create(
         cls, line: int, col: int, end_line: int, end_col: int, val: Json
     ) -> ASTItem:
         return ASTItem(Location(line, col, end_line, end_col), val)
+
+    def get_json_value(self) -> Json:
+        if isinstance(self.value, list):
+            return [child.get_json_value() for child in self.value]
+        if isinstance(self.value, dict):
+            return {key: child.get_json_value() for key, child in self.value.items()}
+        return self.value
 
 
 def _create_scanner_wrapper(
@@ -122,40 +136,38 @@ load = partial(json.load, cls=ASTDecoder)
 loads = partial(json.loads, cls=ASTDecoder)
 
 
-class _ASTTreeRoot(ASTTreeRoot):
+def load_document(content: Union[str, TextIO]) -> Document:
+    if isinstance(content, str):
+        tree = loads(content)
+    else:
+        tree = load(content)
+
+    return Document(tree.get_json_value(), _LocationFinder(tree))
+
+
+class _LocationFinder(LocationFinder):
     def __init__(self, root_item: ASTItem):
         self.root_item = root_item
 
     def lookup_key_loc(self, key: List[Union[str, int]]) -> Location:
         curr_item = self.root_item
         for i, key_part in enumerate(key):
-            if isinstance(key, int):
-                if not isinstance(curr_item.value, list):
-                    raise ValueError()
+            if isinstance(key, int) and not isinstance(curr_item.value, list):
+                raise ListExpectError(key, i)
+            elif not isinstance(curr_item.value, dict):
+                raise MappingExpectError(key, i)
+
+            try:
                 curr_item = curr_item.value[key_part]
-            else:
-                if not isinstance(curr_item.value, dict):
-                    raise ValueError()
-                curr_item = curr_item.value[key_part]
+            except (KeyError, IndexError):
+                raise KeyLookupError(key, i)
 
         return curr_item.location
 
 
-def as_tree(load_result: Any) -> ASTTreeRoot:
-    if not isinstance(load_result, ASTItem):
-        raise ValueError(f'you should pass result of "load" or "loads" here, not {type(load_result)} type')
-
-    return _ASTTreeRoot(load_result)
-
-
 # check that json module is compatible with out implementation
 def _check_capability():
-    try:
-        ASTDecoder()
-    except ValueError as e:
-        if 'probably their internals has been changed' in str(e):
-            raise ImportError(str(e))
-        raise
+    ASTDecoder()
 
 
 _check_capability()

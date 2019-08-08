@@ -48,7 +48,11 @@ JSON_LIST_DICT = """[
         (
             '[{"key": 12345}]',
             _create(
-                1, 1, 1, 17, [_create(1, 2, 1, 16, {'key': _create(1, 10, 1, 15, 12345)})]
+                1,
+                1,
+                1,
+                17,
+                [_create(1, 2, 1, 16, {'key': _create(1, 10, 1, 15, 12345)})],
             ),
         ),
         ('{}', _create(1, 1, 1, 3, {})),
@@ -57,3 +61,22 @@ JSON_LIST_DICT = """[
 )
 def test_json_ast1(in_val, out_val):
     assert json.loads(in_val) == out_val
+
+
+@mark.parametrize(
+    'in_val, out_json',
+    [
+        ('105', 105),
+        ('106.5', 106.5),
+        ('false', False),
+        ('true', True),
+        ('null', None),
+        ('[]', []),
+        ('[12, 23]', [12, 23]),
+        ('[{"key": 12345}]', [{"key": 12345}]),
+        ('{}', {}),
+        ('{"key": 1}', {"key": 1}),
+    ],
+)
+def test_get_json_value(in_val, out_json):
+    assert json.loads(in_val).get_json_value() == out_json

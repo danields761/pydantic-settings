@@ -19,8 +19,11 @@ from typing import (
 
 import toml
 from attr import has as is_attr_class
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+from pydantic.error_wrappers import ErrorWrapper
 from typing_extensions import Protocol
+
+from pydantic_settings.utils import flatten_errors_wrappers
 
 
 class _DataclassProtocol(Protocol):
@@ -114,9 +117,10 @@ class FlatMapRestorer(object):
         )
         self._dead_end_resolver = dead_end_value_resolver
 
-    def apply_values(self, target: Any, flat_map: Mapping[str, str]):
-        for key, val in flat_map.items():
-            key = self._case_reducer(key)
+    def apply_values(self, target: Any, flat_map: Mapping[str, str]) -> Dict[str, str]:
+        consumed: Dict[Tuple[str, ...], str] = {}
+        for orig_key, val in flat_map.items():
+            key = self._case_reducer(orig_key)
             if not key.startswith(self._prefix):
                 continue
             try:
@@ -124,6 +128,9 @@ class FlatMapRestorer(object):
             except KeyError:
                 continue
             self._apply_path_value(target, path, is_complex, val)
+            consumed[tuple(path)] = orig_key
+
+        return consumed
 
     @staticmethod
     def _get_getter_setter(
@@ -168,6 +175,29 @@ class FlatMapRestorer(object):
 T = TypeVar('T', bound='SettingsModel')
 
 
+class ExtendedErrorWrapper(ErrorWrapper):
+    __slots__ = ('env_loc',)
+
+    def __init__(self, *args: Any, env_loc: str = None, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.env_loc = env_loc
+
+    @classmethod
+    def from_error_wrapper(
+        cls, err_wrapper: ErrorWrapper, env_loc: str
+    ) -> ExtendedErrorWrapper:
+        ext_wrappper = object.__new__(cls)
+        for attr in err_wrapper.__slots__:
+            setattr(ext_wrappper, attr, getattr(err_wrapper, attr))
+        ext_wrappper.env_loc = env_loc
+        return ext_wrappper
+
+    def dict(self, *, loc_prefix: Optional[Tuple[str, ...]] = None) -> Dict[str, Any]:
+        d = super().dict(loc_prefix=loc_prefix)
+        d['env_loc'] = self.env_loc
+        return d
+
+
 class SettingsModel(BaseModel):
     class Config:
         env_prefix: ClassVar[str] = 'APP'
@@ -183,8 +213,20 @@ class SettingsModel(BaseModel):
 
     @classmethod
     def from_env(cls: Type[T], environ: Mapping[str, str], **vals: Any) -> T:
-        cls._restorer.apply_values(vals, environ)
-        return cls(**vals)
+        env_vars_applied = cls._restorer.apply_values(vals, environ)
+        try:
+            return cls(**vals)
+        except ValidationError as e:
+            new_raw_errs: List[ErrorWrapper] = []
+            for raw_err in flatten_errors_wrappers(e.raw_errors):
+                try:
+                    new_raw_errs.append(
+                        ExtendedErrorWrapper.from_error_wrapper(raw_err, env_vars_applied[raw_err.loc])
+                    )
+                except KeyError:
+                    new_raw_errs.append(raw_err)
+            e.raw_errors = new_raw_errs
+            raise e
 
     def with_env(self: T, environ: Mapping[str, str]) -> T:
         return self.from_env(environ, self.dict())
