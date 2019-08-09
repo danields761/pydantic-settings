@@ -72,4 +72,6 @@ def load_document(
         if root_node is None:
             root_node = {}
 
-        return Document(loader.construct_document(root_node), _LocationFinder(root_node))
+        return Document(
+            loader.construct_document(root_node), _LocationFinder(root_node)
+        )

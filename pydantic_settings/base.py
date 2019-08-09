@@ -221,7 +221,9 @@ class SettingsModel(BaseModel):
             for raw_err in flatten_errors_wrappers(e.raw_errors):
                 try:
                     new_raw_errs.append(
-                        ExtendedErrorWrapper.from_error_wrapper(raw_err, env_vars_applied[raw_err.loc])
+                        ExtendedErrorWrapper.from_error_wrapper(
+                            raw_err, env_vars_applied[raw_err.loc]
+                        )
                     )
                 except KeyError:
                     new_raw_errs.append(raw_err)

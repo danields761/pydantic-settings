@@ -118,7 +118,9 @@ def load_config(
                 LoaderError(file_path=file_path, loader_name=loader_name, err=e)
             )
         except FileNotFoundError:
-            errors_while_trying.append(ConfigLoadError(file_path=file_path, msg='file not found'))
+            errors_while_trying.append(
+                ConfigLoadError(file_path=file_path, msg='file not found')
+            )
         else:
             if isinstance(document.content, dict):
                 break
