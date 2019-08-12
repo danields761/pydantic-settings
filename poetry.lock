@@ -163,6 +163,18 @@ wcwidth = "*"
 testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "requests"]
 
 [[package]]
+category = "dev"
+description = "A plugin providing an alternative, colourful diff output for failing assertions."
+name = "pytest-clarity"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+version = "0.2.0a1"
+
+[package.dependencies]
+pytest = ">=3.5.0"
+termcolor = "1.1.0"
+
+[[package]]
 category = "main"
 description = "YAML parser and emitter for Python"
 name = "pyyaml"
@@ -177,6 +189,14 @@ name = "six"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*"
 version = "1.12.0"
+
+[[package]]
+category = "dev"
+description = "ANSII Color formatting for output in terminal."
+name = "termcolor"
+optional = false
+python-versions = "*"
+version = "1.1.0"
 
 [[package]]
 category = "dev"
@@ -234,7 +254,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pathlib2", "contextlib2", "unittest2"]
 
 [metadata]
-content-hash = "f07496af1c8313c4bab6f16d29df46d1ff72aa0be1e700f4bf8d4871c5db766b"
+content-hash = "27759b66b56eb97a0143abdf3edc51ac9be71ef9266b11983de6cc4862029762"
 python-versions = "^3.7"
 
 [metadata.hashes]
@@ -252,8 +272,10 @@ py = ["64f65755aee5b381cea27766a3a147c3f15b9b6b9ac88676de66ba2ae36793fa", "dc639
 pydantic = ["08dd1503f0524b78d03df76daf8b66ae213b9eaa0f072ad89d05a981e7aeaad2", "2b5db9a3e976fad1ddcb5e2daf4de87017f6b429e8e4871d3f52c5f004f7eaf7", "68085bebf700c2dbdf0ccdd5f09a4b19c13ced26b9bdd3447920f710fcd98c57", "772300e1efbd1271aade7bb03127c51bf8a2f705c861a8f5e82e0bc97f1f125e", "8bf39547da39abf5e02c79ed13ed377e65a095e2a71069ac7ce625de97840e63", "9324efe3eaa10cca3a488dc8ede1e0907f64394949fc6b51ced68cd2c8c30048"]
 pyparsing = ["6f98a7b9397e206d78cc01df10131398f1c8b8510a2f4d97d9abd82e1aacdd80", "d9338df12903bbf5d65a0e4e87c2161968b10d2e489652bb47001d82a9b028b4"]
 pytest = ["6ef6d06de77ce2961156013e9dff62f1b2688aa04d0dc244299fe7d67e09370d", "a736fed91c12681a7b34617c8fcefe39ea04599ca72c608751c31d89579a3f77"]
+pytest-clarity = ["3f40d5ae7cb21cc95e622fc4f50d9466f80ae0f91460225b8c95c07afbf93e20"]
 pyyaml = ["0113bc0ec2ad727182326b61326afa3d1d8280ae1122493553fd6f4397f33df9", "01adf0b6c6f61bd11af6e10ca52b7d4057dd0be0343eb9283c878cf3af56aee4", "5124373960b0b3f4aa7df1707e63e9f109b5263eca5976c66e08b1c552d4eaf8", "5ca4f10adbddae56d824b2c09668e91219bb178a1eee1faa56af6f99f11bf696", "7907be34ffa3c5a32b60b95f4d95ea25361c951383a894fec31be7252b2b6f34", "7ec9b2a4ed5cad025c2278a1e6a19c011c80a3caaac804fd2d329e9cc2c287c9", "87ae4c829bb25b9fe99cf71fbb2140c448f534e24c998cc60f39ae4f94396a73", "9de9919becc9cc2ff03637872a440195ac4241c80536632fffeb6a1e25a74299", "a5a85b10e450c66b49f98846937e8cfca1db3127a9d5d1e31ca45c3d0bef4c5b", "b0997827b4f6a7c286c01c5f60384d218dca4ed7d9efa945c3e1aa623d5709ae", "b631ef96d3222e62861443cc89d6563ba3eeb816eeb96b2629345ab795e53681", "bf47c0607522fdbca6c9e817a6e81b08491de50f3766a7a0e6a5be7905961b41", "f81025eddd0327c7d4cfe9b62cf33190e1e736cc6e97502b3ec425f574b3e7a8"]
 six = ["3350809f0555b11f552448330d0b52d5f24c91a322ea4a15ef22629740f3761c", "d16a0141ec1a18405cd4ce8b4613101da75da0e9a7aec5bdd4fa804d0e0eba73"]
+termcolor = ["1d6d69ce66211143803fbc56652b41d73b4a400a2891d7bf7a1cdf4c02de613b"]
 toml = ["229f81c57791a41d65e399fc06bf0848bab550a9dfd5ed66df18ce5f05e73d5c", "235682dd292d5899d361a811df37e04a8828a5b1da3115886b73cf81ebc9100e", "f1db651f9657708513243e61e6cc67d101a39bad662eaa9b5546f789338e07a3"]
 tomlkit = ["a8d806f3a453c2d292afe97918398354e405b93919e2e68771a3fd0a90e89576", "c6b0c11b85e888c12330c7605d43c1446aa148cd421163f90ca46ea813f2c336"]
 typing = ["38566c558a0a94d6531012c8e917b1b8518a41e418f7f15f00e129cc80162ad3", "53765ec4f83a2b720214727e319607879fec4acde22c4fbb54fa2604e79e44ce", "84698954b4e6719e912ef9a42a2431407fe3755590831699debda6fba92aac55"]

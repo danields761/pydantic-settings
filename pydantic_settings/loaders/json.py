@@ -54,11 +54,11 @@ def _create_object_hook(original_value):
 @dataclass
 class ASTItem:
     location: Location
-    value: Union[float, int, str, List[ASTItem], Dict[str, ASTItem]]
+    value: AstJsonLike
 
     @classmethod
     def create(
-        cls, line: int, col: int, end_line: int, end_col: int, val: Json
+        cls, line: int, col: int, end_line: int, end_col: int, val: AstJsonLike
     ) -> ASTItem:
         return ASTItem(Location(line, col, end_line, end_col), val)
 
@@ -68,6 +68,9 @@ class ASTItem:
         if isinstance(self.value, dict):
             return {key: child.get_json_value() for key, child in self.value.items()}
         return self.value
+
+
+AstJsonLike = Union[None, float, int, str, List[ASTItem], Dict[str, ASTItem]]
 
 
 def _create_scanner_wrapper(
@@ -103,13 +106,10 @@ class ASTDecoder(json.JSONDecoder):
 
         self.parse_object = _create_object_hook(JSONObject)
         self.parse_array = _create_object_hook(JSONArray)
-        str_parser_wrapper = _create_object_hook(scanstring)
-        self.parse_string = lambda s, end, strict: str_parser_wrapper(
-            (s, end),
-            lambda s_with_end, strict_: scanstring(
-                s_with_end[0], s_with_end[1], strict_
-            ),
+        str_parser_wrapper = _create_object_hook(
+            lambda s_with_end, strict: scanstring(*s_with_end, strict)
         )
+        self.parse_string = lambda s, end, strict: str_parser_wrapper((s, end), strict)
 
         # here i'am patching scanner closure, because it's internally refers for
         # itself and it is't configurable.

@@ -3,76 +3,32 @@ Some utilities to help with *pydantic* or extends it's behaviour
 """
 from __future__ import annotations
 
-from functools import partial
+from io import StringIO
+from os import environ as os_environ
 from pathlib import Path
-from typing import Type, TextIO, Optional, List, Union, Tuple, Any
+from typing import Type, TextIO, Optional, List, Union, Mapping
 
-from attr import dataclass
 from pydantic import BaseModel, ValidationError
+from pydantic.error_wrappers import ErrorWrapper
 
-from pydantic_settings.base import SettingsModel, ExtendedErrorWrapper
-from pydantic_settings.loaders import (
-    Document,
-    DocumentLoader,
-    get_loader,
-    Location,
-    KeyLookupError,
+from pydantic_settings.base import BaseSettingsModel
+from pydantic_settings.errors import (
+    ExtendedErrorWrapper,
+    flatten_errors_wrappers,
+    LoadingError,
+    LoadingValidationError,
+    LoadingParseError,
 )
-from pydantic_settings.utils import flatten_errors_wrappers
+from pydantic_settings.loaders import Document, get_loader, KeyLookupError, LoaderMeta
 
 
-dataclass = partial(dataclass, repr=True, str=True)
-
-
-@dataclass
-class ConfigLoadError(ValueError):
-    """
-    Indicates that configuration file couldn't be loaded and provides cause of this error
-    """
-
-    file_path: Path
-    msg: str = None
-
-    @property
-    def args(self) -> List[Any]:
-        return list(self.__dict__.values())
-
-
-@dataclass(kw_only=True)
-class ConfigMultipleErrors(ConfigLoadError):
-    file_path: Path
-    errs: List[ConfigLoadError]
-
-    @classmethod
-    def ensure_multiple(cls, errs: List[ConfigLoadError]) -> ConfigLoadError:
-        assert len(errs) > 0
-        if len(errs) == 1:
-            return errs[0]
-        self = cls(file_path=errs[0].file_path, errs=errs)
-        return self.with_traceback(errs[0].__traceback__)
-
-
-@dataclass(kw_only=True)
-class LoaderError(ConfigLoadError):
-    file_path: Path
-    loader_name: str
-    err: Exception
-
-
-@dataclass(kw_only=True)
-class InvalidValueError(ConfigLoadError):
-    file_path: Path
-    loc: Union[Location, str, List[Union[str, int]]]
-    err: Exception
-    from_env: bool = False
-
-
-def load_config(
-    cls: Type[SettingsModel],
+def load_settings(
+    cls: Type[BaseSettingsModel],
     file_or_path: Union[TextIO, str, Path],
     *,
     type_hint: str = None,
-    load_env: bool = False
+    load_env: bool = False,
+    _environ: Mapping[str, str] = None,
 ) -> BaseModel:
     """
     Load settings from file and/or environment variables and binds them to a *pydantic* model. Supports *json*,
@@ -82,94 +38,102 @@ def load_config(
     :param file_or_path: configuration file name
     :param type_hint: type hint from which appropriate decoder may be chosen
     :param load_env: load environment variables
+    :param _environ: semi-private parameter intended to easily mock environ from tests
+
     :raises ConfigLoadError: in case if any error occurred while loading configuration file
+
     :return: settings model instance
     """
     # prepare list of loaders based on file such parameters
     # as file extension and given type hint
-    try_loaders: List[str, DocumentLoader, Tuple[Exception]] = []
+    try_loaders: List[LoaderMeta] = []
 
-    if isinstance(file_or_path, (str, Path)):
-        file_path = (
-            file_or_path if isinstance(file_or_path, Path) else Path(file_or_path)
-        )
+    if isinstance(file_or_path, Path):
+        file_path = Path(file_or_path)
+        content = file_path.read_text()
     else:
-        file_path = Path(file_or_path.name)
+        if isinstance(file_or_path, StringIO):
+            file_path = None
+            content = file_or_path.getvalue()
+        elif isinstance(file_or_path, str):
+            content = file_or_path
+            file_path = None
+        else:
+            file_path = Path(file_or_path.name)
+            content = file_path.read_text()
 
-    file_last_suffix = file_path.suffix
-    if file_last_suffix != '':
-        try_loaders.append(get_loader(file_last_suffix))
+    if file_path:
+        file_last_suffix = file_path.suffix
+        if file_last_suffix != '':
+            try_loaders.append(get_loader(file_last_suffix))
     if type_hint is not None:
         l = get_loader(type_hint)
         if l not in try_loaders:
             try_loaders.append(l)
 
     if len(try_loaders) == 0:
-        raise ConfigLoadError(file_path, 'unable to find appropriate loader')
+        raise LoadingError(
+            file_path, msg='unable to find appropriate loader for file of this type'
+        )
 
     # try loaders until valid result will be returned
     document: Optional[Document] = None
-    errors_while_trying: List[ConfigLoadError] = []
-    for attempt, (loader_name, loader, loader_err_cls) in enumerate(try_loaders, 1):
+    errors_while_trying: List[Exception] = []
+    for attempt, loader_desc in enumerate(try_loaders, 1):
         try:
-            document = loader(file_or_path)
-        except loader_err_cls as e:
+            document = loader_desc.load(content)
+        except loader_desc.root_exc as e:
             errors_while_trying.append(
-                LoaderError(file_path=file_path, loader_name=loader_name, err=e)
-            )
-        except FileNotFoundError:
-            errors_while_trying.append(
-                ConfigLoadError(file_path=file_path, msg='file not found')
-            )
-        else:
-            if isinstance(document.content, dict):
-                break
-            document = None
-            errors_while_trying.append(
-                LoaderError(
-                    file_path=file_path,
-                    loader_name=loader_name,
-                    err=ValueError('value at root must be a dictionary'),
+                LoadingParseError(
+                    file_path,
+                    e,
+                    f'parsing exception occurs in loader of "{loader_desc.name}" type',
+                    location=loader_desc.get_err_loc(e),
                 )
             )
+            continue
+        except FileNotFoundError:
+            raise LoadingError(file_path, msg='file not found')
+
+        if document.content is not None and not isinstance(document.content, dict):
+            errors_while_trying.append(
+                LoadingError(file_path, msg='value at root must be a dictionary')
+            )
+        else:
+            break
 
     assert document is not None or len(errors_while_trying) > 0
     if len(errors_while_trying) and document is None:
-        raise ConfigMultipleErrors.ensure_multiple(errors_while_trying)
+        raise LoadingError(
+            file_path,
+            msg='some loaders being tried, but all failed',
+            errs=errors_while_trying,
+        )
 
     # construct object
-    errs: List[ConfigLoadError] = []
+    document_content = document.content or {}
     try:
         if load_env:
-            import os
-
-            result = cls.from_env(os.environ, **document.content)
+            result = cls.from_env(_environ or os_environ, **document_content)
         else:
-            result = cls(**document.content)
+            result = cls(**document_content)
     except ValidationError as e:
         assert len(e.raw_errors) > 0
+
+        errs: List[ErrorWrapper] = []
         for raw_err in flatten_errors_wrappers(e.raw_errors):
             if not isinstance(raw_err, ExtendedErrorWrapper):
                 try:
                     loc = document.location_finder.lookup_key_loc(raw_err.loc)
-                except KeyLookupError:
-                    # i don't really know what to do with such errors
-                    # theoretically they should be never raised
-                    loc = raw_err.loc
-                errs.append(
-                    InvalidValueError(file_path=file_path, loc=loc, err=raw_err.exc)
-                )
-            else:
-                errs.append(
-                    InvalidValueError(
-                        file_path=file_path,
-                        loc=raw_err.env_loc,
-                        err=raw_err.exc,
-                        from_env=True,
+                    raw_err = ExtendedErrorWrapper.from_error_wrapper(
+                        raw_err, text_loc=loc
                     )
-                )
+                except KeyLookupError:
+                    # i not really sure what to do with such errors
+                    # theoretically they should never happen
+                    pass
+            errs.append(raw_err)
 
-    if errs:
-        raise ConfigMultipleErrors.ensure_multiple(errs)
+        raise LoadingValidationError(errs, file_path, content) from e
 
     return result

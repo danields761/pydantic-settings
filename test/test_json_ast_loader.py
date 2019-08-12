@@ -3,7 +3,7 @@ from __future__ import annotations
 from pytest import mark
 
 import pydantic_settings.loaders.json
-from pydantic_settings.loaders import json, common
+from pydantic_settings.loaders import json
 
 
 _create = pydantic_settings.loaders.json.ASTItem.create
@@ -76,6 +76,7 @@ def test_json_ast1(in_val, out_val):
         ('[{"key": 12345}]', [{"key": 12345}]),
         ('{}', {}),
         ('{"key": 1}', {"key": 1}),
+        ('{"key": "bar"}', {"key": "bar"}),
     ],
 )
 def test_get_json_value(in_val, out_json):

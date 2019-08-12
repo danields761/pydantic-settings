@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union, List, Callable, TextIO
+from typing import Union, List, Callable, TextIO, Iterable
 
 from attr import dataclass
 
@@ -14,7 +14,7 @@ class Document:
     location_finder: LocationFinder
 
 
-DocumentLoader = Callable[[Union[str, Path, TextIO]], Document]
+DocumentLoaderCallable = Callable[[Union[str, Path, TextIO]], Document]
 
 
 @dataclass
@@ -28,7 +28,7 @@ class Location:
         raise NotImplementedError
 
 
-@dataclass(str=True)
+@dataclass
 class KeyLookupError(ValueError):
     key: List[Union[str, int]]
     part_pos: int
@@ -38,7 +38,7 @@ class KeyLookupError(ValueError):
 
     def __repr__(self) -> str:
         key_repr = ']['.join(repr(part) for part in self.key)
-        return f"Requested key {key_repr} can't being found within document"
+        return f"Requested key {key_repr} can't be found within document"
 
 
 class MappingExpectError(KeyLookupError):
@@ -50,5 +50,5 @@ class ListExpectError(KeyLookupError):
 
 
 class LocationFinder:
-    def lookup_key_loc(self, key: List[Union[str, int]]) -> Location:
+    def lookup_key_loc(self, key: Iterable[Union[str, int]]) -> Location:
         raise NotImplementedError

@@ -1,11 +1,17 @@
-import toml
-import yaml
-from attr import dataclass as attr_dataclass
-from pydantic import BaseModel
 from dataclasses import dataclass
+from unittest.mock import ANY
 
-from pytest import fixture, mark
-from pydantic_settings.base import _build_model_flat_map, FlatMapRestorer, SettingsModel
+import toml
+from attr import dataclass as attr_dataclass
+from pydantic import BaseModel, ValidationError, MissingError
+from pytest import fixture, mark, raises
+
+from pydantic_settings.base import (
+    _build_model_flat_map,
+    FlatMapRestorer,
+    BaseSettingsModel,
+)
+from pydantic_settings.errors import ExtendedErrorWrapper
 
 
 class Model1(BaseModel):
@@ -65,23 +71,19 @@ class Model6(BaseModel):
     baf: Model1
 
 
-class Model7(BaseModel):
-    pass
-
-
 def test_flat_model():
     assert _build_model_flat_map(Model1, 'test', str.casefold) == {
-        'test_foo': (['foo'], False),
-        'test_bar': (['bar'], False),
+        'test_foo': (('foo',), False),
+        'test_bar': (('bar',), False),
     }
 
 
 @mark.parametrize('model_cls', [Model4, Model5])
 def test_complex_nested_models(model_cls):
     assert _build_model_flat_map(model_cls, 'test', str.casefold) == {
-        'test_foo': (['foo'], True),
-        'test_foo_bar': (['foo', 'bar'], False),
-        'test_foo_baz': (['foo', 'baz'], False),
+        'test_foo': (('foo',), True),
+        'test_foo_bar': (('foo', 'bar'), False),
+        'test_foo_baz': (('foo', 'baz'), False),
     }
 
 
@@ -132,7 +134,12 @@ def test_complex_nested_models(model_cls):
 )
 def test_restore_model(model_cls, input_val, result):
     target = {}
-    FlatMapRestorer(model_cls, 'TEST', True, toml.loads).apply_values(target, input_val)
+    assert (
+        FlatMapRestorer(model_cls, 'TEST', True, toml.loads).apply_values(
+            target, input_val
+        )
+        == ANY
+    ), ()
     assert target == result
 
 
@@ -159,15 +166,35 @@ def test_restore_model(model_cls, input_val, result):
 )
 def test_apply_on_model(model_cls, input_val, result, target_factory):
     target = target_factory()
-    FlatMapRestorer(model_cls, 'TEST', True, toml.loads).apply_values(target, input_val)
+    assert FlatMapRestorer(model_cls, 'TEST', True, toml.loads).apply_values(
+        target, input_val
+    ) == (ANY, [])
     assert target == result
 
 
-class SettingModel1(SettingsModel):
+class SettingModel1(BaseSettingsModel):
     class Baz(BaseModel):
         baf: Model1
 
     baz: Baz
+
+
+def test_invalid_env_var_assignment():
+    with raises(ValidationError) as exc_info:
+        SettingModel1.from_env(
+            {'APP_BAZ': 'SOMETHING DEFINITELY NOT A JSON OR TOML STRING'}
+        )
+
+    assert len(exc_info.value.raw_errors) == 2
+
+    assert exc_info.value.raw_errors[0].loc == ('baz',)
+    assert isinstance(exc_info.value.raw_errors[0], ExtendedErrorWrapper)
+    assert exc_info.value.raw_errors[0].env_loc == 'APP_BAZ'
+    assert isinstance(exc_info.value.raw_errors[0].exc, toml.TomlDecodeError)
+
+    assert not isinstance(exc_info.value.raw_errors[1], ExtendedErrorWrapper)
+    assert exc_info.value.raw_errors[1].loc == ('baz',)
+    assert isinstance(exc_info.value.raw_errors[1].exc, MissingError)
 
 
 def test_settings_model():
