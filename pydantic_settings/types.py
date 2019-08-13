@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import Field
 from typing import Dict, Union, List, Any, TYPE_CHECKING, ClassVar, Type
 

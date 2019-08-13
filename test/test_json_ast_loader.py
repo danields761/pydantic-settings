@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pytest import mark
 
 import pydantic_settings.loaders.json

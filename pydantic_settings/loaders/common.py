@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Union, List, Callable, TextIO, Iterable
 
@@ -11,7 +9,7 @@ from pydantic_settings.types import Json
 @dataclass
 class Document:
     content: Json
-    location_finder: LocationFinder
+    location_finder: 'LocationFinder'
 
 
 DocumentLoaderCallable = Callable[[Union[str, Path, TextIO]], Document]

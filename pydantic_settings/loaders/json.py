@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import json.scanner
 from functools import partial, wraps
@@ -54,12 +52,12 @@ def _create_object_hook(original_value):
 @dataclass
 class ASTItem:
     location: Location
-    value: AstJsonLike
+    value: 'AstJsonLike'
 
     @classmethod
     def create(
-        cls, line: int, col: int, end_line: int, end_col: int, val: AstJsonLike
-    ) -> ASTItem:
+        cls, line: int, col: int, end_line: int, end_col: int, val: 'AstJsonLike'
+    ) -> 'ASTItem':
         return ASTItem(Location(line, col, end_line, end_col), val)
 
     def get_json_value(self) -> Json:
@@ -113,8 +111,8 @@ class ASTDecoder(json.JSONDecoder):
 
         # here i'am patching scanner closure, because it's internally refers for
         # itself and it is't configurable.
-        # schema is: 'py_make_scanner' defines '_scan_once', which is referred by 'scan_once' which
-        # is result of 'py_make_scanner()' expression
+        # schema is: 'py_make_scanner' defines '_scan_once', which is referred by
+        # 'scan_once' which is result of 'py_make_scanner()' expression
         orig_scanner = json.scanner.py_make_scanner(self)
         try:
             cell = next(
@@ -125,15 +123,100 @@ class ASTDecoder(json.JSONDecoder):
             )
         except StopIteration:
             raise ValueError(
-                f'Failed to path {orig_scanner.__name__}, probably their internals has been changed'
+                f'Failed to path {orig_scanner.__name__}, probably their internals'
+                f' has been changed'
             )
 
         self.scan_once = _create_scanner_wrapper(cell.cell_contents)
-        cell.cell_contents = self.scan_once
+        # Function closure cells read-only before python 3.7,
+        # here using
+        _cell_set(cell, self.scan_once)
 
 
 load = partial(json.load, cls=ASTDecoder)
 loads = partial(json.loads, cls=ASTDecoder)
+
+
+def _make_cell_set_template_code():
+    """
+This module was extracted from the `cloud` package, developed by
+PiCloud, Inc.
+
+Copyright (c) 2015, Cloudpickle contributors.
+Copyright (c) 2012, Regents of the University of California.
+Copyright (c) 2009 PiCloud, Inc. http://www.picloud.com.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the University of California, Berkeley nor the
+      names of its contributors may be used to endorse or promote
+      products derived from this software without specific prior written
+      permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Docs stripped, borrowed from here
+    https://github.com/cloudpipe/cloudpickle/pull/90/files#diff-d2a3618afedd4e124c532151eedbae09R74
+    """
+    import types
+
+    def inner(value):
+        lambda: cell  # make ``cell`` a closure so that we get a STORE_DEREF
+        cell = value
+
+    co = inner.__code__
+
+    # NOTE: we are marking the cell variable as a free variable intentionally
+    # so that we simulate an inner function instead of the outer function. This
+    # is what gives us the ``nonlocal`` behavior in a Python 2 compatible way.
+    return types.CodeType(
+        co.co_argcount,
+        co.co_kwonlyargcount,
+        co.co_nlocals,
+        co.co_stacksize,
+        co.co_flags,
+        co.co_code,
+        co.co_consts,
+        co.co_names,
+        co.co_varnames,
+        co.co_filename,
+        co.co_name,
+        co.co_firstlineno,
+        co.co_lnotab,
+        co.co_cellvars,  # this is the trickery
+        (),
+    )
+
+
+_cell_set_template_code = _make_cell_set_template_code()
+
+
+def _cell_set(cell, value):
+    """
+    Set the value of a closure cell.
+    """
+    import types
+
+    return types.FunctionType(
+        _cell_set_template_code, {}, '_cell_set_inner', (), (cell,)
+    )(value)
 
 
 def load_document(content: Union[str, TextIO]) -> Document:

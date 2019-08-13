@@ -1,8 +1,6 @@
 """
 Some utilities to help with *pydantic* or extends it's behaviour
 """
-from __future__ import annotations
-
 from io import StringIO
 from os import environ as os_environ
 from pathlib import Path

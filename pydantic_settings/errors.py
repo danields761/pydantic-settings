@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterable
 
@@ -118,7 +116,7 @@ class ExtendedErrorWrapper(ErrorWrapper):
         *,
         env_loc: str = None,
         text_loc: Location = None,
-    ) -> ExtendedErrorWrapper:
+    ) -> 'ExtendedErrorWrapper':
         """
         Alternative constructor trying to make copying faster
         """
