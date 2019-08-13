@@ -86,5 +86,5 @@ auth_secret: 5O5qOWiM5qnvUwvQtP1_bUTonSIn7I7C66eqVGL2it0
 1. partially, only *json* and *yaml* supported for now
 2. doesn't supports overriding inside list, case-sensitive implementation
 3. done
-4. not started
+4. done (*attr* classes not supported for now)
 5. not started

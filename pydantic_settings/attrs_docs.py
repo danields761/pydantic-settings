@@ -1,8 +1,8 @@
 import ast
+import dataclasses
 import inspect
 import textwrap
-from typing import Dict, Type, Mapping, Any, Optional
-import dataclasses
+from typing import Dict, Type, Mapping, Optional
 
 import attr
 from pydantic import BaseModel
@@ -40,7 +40,7 @@ def extract_ast_fields_docs_from_classdef(tree: ast.ClassDef) -> Dict[str, str]:
     return collected
 
 
-def extract_sphinx_class_atrib_docs(model: Type) -> Dict[str, str]:
+def extract_sphinx_class_attrib_docs(model: Type) -> Dict[str, str]:
     """
     Extract Sphinx-style class attributes documentation from class definition. Use
     `extract_ast_fields_docs_from_classdef` in case, when object sources can't bee extracted and you have some
@@ -78,7 +78,7 @@ def extract_sphinx_class_atrib_docs(model: Type) -> Dict[str, str]:
 
 
 # TODO class fields may be documented in class-docstring using "ivar", "var" or numpy "attributes" directives
-extract_class_attrib_docs = extract_sphinx_class_atrib_docs
+extract_class_attrib_docs = extract_sphinx_class_attrib_docs
 
 
 def apply_attributes_docs(model: AnyModelType, *, override_existed: bool = True):
@@ -106,6 +106,7 @@ def apply_attributes_docs(model: AnyModelType, *, override_existed: bool = True)
             except KeyError:
                 pass
     elif attr.has(model):
+        # TODO figure out how attribute.metadata may be changed, since attr internals read-only
         raise NotImplementedError
     elif dataclasses.is_dataclass(model):
         for field in dataclasses.fields(model):

@@ -33,6 +33,23 @@ class LoadingError(ValueError):
             content,
         )
 
+    def render_error(
+        self, *, print_file_snippets: bool = False, snippet_take_lines: int = 3
+    ) -> str:
+        """
+        Render error as a human-readable text with errors descriptions and error snippets
+
+        **NOTE**: file snippet may take lines with secure credentials, as a result your secrets may leak
+        into server logs and observed by second-party. So enabling `print_file_snippets` is a risky
+        and not recommended for back-end development.
+
+        :param print_file_snippets: print snippets of a error helping to locate it (see *NOTE* section)
+        :param snippet_take_lines: how much lines up and down file snippet will take
+        :return: rendered text string
+        """
+        # TODO
+        raise NotImplementedError
+
 
 class LoadingParseError(LoadingError):
     """
