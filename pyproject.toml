@@ -16,7 +16,6 @@ typing-extensions = "^3.7.4"
 pytest = "^5.0.1"
 black = "^19.3b0"
 pytest-clarity = "^0.2.0-alpha.1"
-pre-commit = "^1.18.1"
 
 [tool.black]
 # UEAH thats works

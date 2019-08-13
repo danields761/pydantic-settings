@@ -2,7 +2,7 @@
 
 Library which extends **pydantic** functionality in scope of application settings.
 
-Pydantic already have settings implementation, e.g. `pydantic.BaseSettings`, but from my point it missing some useful features, listed below.
+Pydantic already have settings implementation, e.g. `pydantic.BaseSettings`, but from my point it's missing some useful features, listed below.
 
 ## Features
 

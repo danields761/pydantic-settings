@@ -17,8 +17,8 @@ def extract_ast_fields_docs_from_classdef(tree: ast.ClassDef) -> Dict[str, str]:
     """
     Extract Sphinx-style class attributes documentation from it AST-tree
 
-    :param tree:
-    :return:
+    :param tree: class definition root node
+    :return: mapping "field name" => "extracted docstring"
     """
     expect_str_def_for: str = ''
     collected: Dict[str, str] = {}
@@ -42,11 +42,18 @@ def extract_ast_fields_docs_from_classdef(tree: ast.ClassDef) -> Dict[str, str]:
 
 def extract_sphinx_class_attrib_docs(model: Type) -> Dict[str, str]:
     """
-    Extract Sphinx-style class attributes documentation from class definition. Use
-    `extract_ast_fields_docs_from_classdef` in case, when object sources can't bee extracted and you have some
-    workaround to get them.
+    Extract Sphinx-style class attributes documentation from class definition.
 
-    Skips fields which is defined with multiple assignment syntax like "foo, bar, ... = 'some', 'values', ...".
+    Doesn't performs lookup for base classes.
+
+    Skips fields which is defined with multiple assignment syntax like "foo, bar,
+    ... = 'some', 'values', ..." because it really unclear, by which attribute name
+    the docs should be labeled.
+
+    :param model: type object (instances allowed as well) of a class for whom
+    appropriate sources may be found using `inspect.getsource`. Use
+    `extract_ast_fields_docs_from_classdef` instead in case, when object sources
+    can't be extracted and you have some workaround to get them.
 
     :raise ValueError: in case if given object can't provide sources.
     :raise TypeError: in case if object isn't class definition
@@ -71,25 +78,25 @@ def extract_sphinx_class_attrib_docs(model: Type) -> Dict[str, str]:
     definition = parsed.body[0]
     if not isinstance(definition, ast.ClassDef):
         raise TypeError(
-            f' definition {model_cls} is not a class definition, found root type {type(definition)}'
+            f' definition {model_cls} is not a class '
+            f'definition, found root type {type(definition)}'
         )
 
     return extract_ast_fields_docs_from_classdef(definition)
 
 
-# TODO class fields may be documented in class-docstring using "ivar", "var" or numpy "attributes" directives
+# TODO class fields may be documented in class-docstring using "ivar", "var"
+# or numpy "attributes" directives
 extract_class_attrib_docs = extract_sphinx_class_attrib_docs
 
 
 def apply_attributes_docs(model: AnyModelType, *, override_existed: bool = True):
     """
-    Apply in-place model attributes documentation extracted using `extract_class_attrib_docs`.
-    Resulted may docs be found inside 'field.schema.description' for *pydantic* model field,
-    'field.metadata['doc'] for *dataclass* field and 'attribute.metadata['doc']
-    for *attr* attribute.
-
-    Note, that routine doesn't perform recursive traversal, because class alias, defined inside
-    another class, may lead to unexpected behaviour.
+    Apply in-place model attributes documentation extracted using
+    `extract_class_attrib_docs`. Resulted docs may be found inside
+    'field.schema.description' for *pydantic* model field, 'field.metadata['doc'] for
+    *dataclass* field and 'attribute.metadata['doc'] for *attr* attribute. See
+    `extract_class_attrib_docs` for more details how extraction is performed.
 
     :param model: either `pydantic.BaseModel` or `attr` or `dataclass`
     :param override_existed: override existing descriptions
@@ -106,7 +113,8 @@ def apply_attributes_docs(model: AnyModelType, *, override_existed: bool = True)
             except KeyError:
                 pass
     elif attr.has(model):
-        # TODO figure out how attribute.metadata may be changed, since attr internals read-only
+        # TODO figure out how attribute.metadata may be changed, since attr
+        #  internals read-only
         raise NotImplementedError
     elif dataclasses.is_dataclass(model):
         for field in dataclasses.fields(model):

@@ -24,7 +24,7 @@ from pydantic import BaseModel, ValidationError
 from pydantic.error_wrappers import ErrorWrapper
 
 from pydantic_settings.errors import ExtendedErrorWrapper, flatten_errors_wrappers
-from pydantic_settings.field_docs import apply_attributes_docs
+from pydantic_settings.attrs_docs import apply_attributes_docs
 from pydantic_settings.types import AnyModelType
 
 

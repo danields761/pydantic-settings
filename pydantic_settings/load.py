@@ -6,7 +6,7 @@ from __future__ import annotations
 from io import StringIO
 from os import environ as os_environ
 from pathlib import Path
-from typing import Type, TextIO, Optional, List, Union, Mapping
+from typing import Type, TextIO, Optional, List, Union, Mapping, Tuple
 
 from pydantic import BaseModel, ValidationError
 from pydantic.error_wrappers import ErrorWrapper
@@ -22,30 +22,9 @@ from pydantic_settings.errors import (
 from pydantic_settings.loaders import Document, get_loader, KeyLookupError, LoaderMeta
 
 
-def load_settings(
-    cls: Type[BaseSettingsModel],
-    file_or_path: Union[TextIO, str, Path],
-    *,
-    type_hint: str = None,
-    load_env: bool = False,
-    _environ: Mapping[str, str] = None,
-) -> BaseModel:
-    """
-    Load settings from file and/or environment variables and binds them to a *pydantic* model. Supports *json*,
-    *yaml* and *toml* formats. File format is inferred from file extension or from given type hint.
-
-    :param cls: model class
-    :param file_or_path: configuration file name
-    :param type_hint: type hint from which appropriate decoder may be chosen
-    :param load_env: load environment variables
-    :param _environ: semi-private parameter intended to easily mock environ from tests
-
-    :raises ConfigLoadError: in case if any error occurred while loading configuration file
-
-    :return: settings model instance
-    """
-    # prepare list of loaders based on file such parameters
-    # as file extension and given type hint
+def _lookup_loader(
+    file_or_path: Union[TextIO, str, Path], type_hint: str = None
+) -> Tuple[List[LoaderMeta], Path, str]:
     try_loaders: List[LoaderMeta] = []
 
     if isinstance(file_or_path, Path):
@@ -67,14 +46,45 @@ def load_settings(
         if file_last_suffix != '':
             try_loaders.append(get_loader(file_last_suffix))
     if type_hint is not None:
-        l = get_loader(type_hint)
-        if l not in try_loaders:
-            try_loaders.append(l)
+        type_hint_loader = get_loader(type_hint)
+        if type_hint_loader not in try_loaders:
+            try_loaders.append(type_hint_loader)
 
     if len(try_loaders) == 0:
         raise LoadingError(
             file_path, msg='unable to find appropriate loader for file of this type'
         )
+
+    return try_loaders, file_path, content
+
+
+def load_settings(
+    cls: Type[BaseSettingsModel],
+    file_or_path: Union[TextIO, str, Path],
+    *,
+    type_hint: str = None,
+    load_env: bool = False,
+    _environ: Mapping[str, str] = None,
+) -> BaseModel:
+    """
+    Load settings from file and/or environment variables and binds them to a
+    *pydantic* model. Supports *json*, *yaml* and *toml* formats. File format is
+    inferred from file extension or from given type hint.
+
+    :param cls: model class
+    :param file_or_path: configuration file name
+    :param type_hint: type hint from which appropriate decoder may be chosen
+    :param load_env: load environment variables
+    :param _environ: semi-private parameter intended to easily mock environ from tests
+
+    :raises ConfigLoadError: in case if any error occurred while loading
+    configuration file
+
+    :return: settings model instance
+    """
+    # prepare list of loaders based on file such parameters
+    # as file extension and given type hint
+    try_loaders, file_path, content = _lookup_loader(file_or_path, type_hint)
 
     # try loaders until valid result will be returned
     document: Optional[Document] = None
@@ -89,6 +99,7 @@ def load_settings(
                     e,
                     f'parsing exception occurs in loader of "{loader_desc.name}" type',
                     location=loader_desc.get_err_loc(e),
+                    loader=loader_desc,
                 )
             )
             continue

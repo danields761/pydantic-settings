@@ -4,7 +4,7 @@ import attr
 from pydantic import BaseModel, Schema
 from pytest import mark
 
-from pydantic_settings.field_docs import extract_class_attrib_docs, with_attrs_docs
+from pydantic_settings.attrs_docs import extract_class_attrib_docs, with_attrs_docs
 
 
 class SphinxLikeAttribDocs:
