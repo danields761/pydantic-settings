@@ -203,3 +203,11 @@ def test_settings_model():
     ) == SettingModel1(
         baz=SettingModel1.Baz(baf=Model1(foo='TEST_VAL1', bar='TEST_VAL2'))
     )
+
+
+def test_settings_model_attrs_docs_created_automatically():
+    class SettingsModel(BaseSettingsModel):
+        bar: int
+        """bar description"""
+
+    assert SettingsModel.__fields__['bar'].schema.description == 'bar description'

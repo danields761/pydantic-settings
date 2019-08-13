@@ -6,7 +6,7 @@ Pydantic already have settings implementation, e.g. `pydantic.BaseSettings`, but
 
 ## Features
 
-1. Point exact location of a field which contains errors
+1. Point exact location of a failed field in the text
 2. Override file values by environment variables, even if a field is nested
 
 Allow to override values for nested fields if they are represented as *pydantic* model, `dataclass` or `attrs` dataclass. Here is example:

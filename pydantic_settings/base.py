@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import Field, is_dataclass
+from dataclasses import is_dataclass
 from typing import (
     Any,
     ClassVar,
@@ -22,20 +22,12 @@ import toml
 from attr import has as is_attr_class
 from pydantic import BaseModel, ValidationError
 from pydantic.error_wrappers import ErrorWrapper
-from typing_extensions import Protocol
 
 from pydantic_settings.errors import ExtendedErrorWrapper, flatten_errors_wrappers
+from pydantic_settings.field_docs import apply_attributes_docs
+from pydantic_settings.types import AnyModelType
 
 
-class _DataclassProtocol(Protocol):
-    __dataclass_fields__: ClassVar[Dict[str, Field]]
-
-
-class _AttrsProtocol(Protocol):
-    __attrs_attrs__: ClassVar[Dict[str, Any]]
-
-
-_AnyModelType = Type[Union[BaseModel, _DataclassProtocol, _AttrsProtocol]]
 _RecStrDictValue = Union['_RecStrDict', str]
 _RecStrDict = Dict[str, _RecStrDictValue]
 _NestedMappingPath = Tuple[Sequence[str], bool]
@@ -49,7 +41,7 @@ def _is_determined_complex_field(field_type: Any):
     )
 
 
-def _list_fields(model: _AnyModelType) -> Iterator[Tuple[str, Type]]:
+def _list_fields(model: AnyModelType) -> Iterator[Tuple[str, Type]]:
     if issubclass(model, BaseModel):
         for field in model.__fields__.values():
             yield field.name, field.type_
@@ -64,7 +56,7 @@ def _list_fields(model: _AnyModelType) -> Iterator[Tuple[str, Type]]:
 
 
 def _traveler(
-    model: Type[_AnyModelType],
+    model: Type[AnyModelType],
     prefix: str,
     loc: Tuple[str],
     case_reducer: Callable[[str], str],
@@ -77,7 +69,7 @@ def _traveler(
         yield new_prefix, (new_loc, is_complex_field)
         if is_complex_field:
             yield from _traveler(
-                cast(_AnyModelType, field_type), new_prefix, new_loc, case_reducer
+                cast(AnyModelType, field_type), new_prefix, new_loc, case_reducer
             )
 
 
@@ -104,7 +96,7 @@ class FlatMapRestorer(object):
 
     def __init__(
         self,
-        model: _AnyModelType,
+        model: AnyModelType,
         prefix: str,
         case_sensitive: bool,
         dead_end_value_resolver: Callable[[str], _RecStrDict],
@@ -192,6 +184,8 @@ class BaseSettingsModel(BaseModel):
     class Config:
         env_prefix: ClassVar[str] = 'APP'
         complex_inline_values_decoder = toml.loads
+        build_attr_docs: bool = True
+        override_exited_attrs_docs: bool = False
 
     _FLAT_NAMES_MAPPER_MAP: ClassVar[Dict[str, Sequence[str]]] = {}
 
@@ -200,6 +194,10 @@ class BaseSettingsModel(BaseModel):
         cls._restorer = FlatMapRestorer(
             cls, config.env_prefix, True, config.complex_inline_values_decoder
         )
+        if config.build_attr_docs:
+            apply_attributes_docs(
+                cls, override_existed=config.override_exited_attrs_docs
+            )
 
     @classmethod
     def from_env(cls: Type[T], environ: Mapping[str, str], **vals: Any) -> T:

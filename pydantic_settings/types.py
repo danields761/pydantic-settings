@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Union, List, Any, TYPE_CHECKING
+from dataclasses import Field
+from typing import Dict, Union, List, Any, TYPE_CHECKING, ClassVar, Type
+
+from pydantic import BaseModel
+from typing_extensions import Protocol
 
 
 if not TYPE_CHECKING:
@@ -14,3 +18,14 @@ else:
     Json = Union[None, float, int, str, Dict[str, Any], List[Any]]
     JsonDict = Dict[str, Json]
     JsonList = List[Json]
+
+
+class DataclassProtocol(Protocol):
+    __dataclass_fields__: ClassVar[Dict[str, Field]]
+
+
+class AttrsProtocol(Protocol):
+    __attrs_attrs__: ClassVar[Dict[str, Any]]
+
+
+AnyModelType = Type[Union[BaseModel, DataclassProtocol, AttrsProtocol]]
