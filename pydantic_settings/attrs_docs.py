@@ -86,7 +86,7 @@ def extract_sphinx_class_attrib_docs(model: Type) -> Dict[str, str]:
 
 
 # TODO class fields may be documented in class-docstring using "ivar", "var"
-# or numpy "attributes" directives
+# or inside numpy "attributes" directives
 extract_class_attrib_docs = extract_sphinx_class_attrib_docs
 
 

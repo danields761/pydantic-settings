@@ -11,6 +11,9 @@ pydantic = "^0.31.1"
 pyyaml = "^5.1.2"
 tomlkit = "^0.5.5"
 typing-extensions = "^3.7.4"
+"ruamel.yaml" = "^0.16.2"
+stringcase = "^1.2"
+more-itertools = "^7.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.0.1"

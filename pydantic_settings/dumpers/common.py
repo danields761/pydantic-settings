@@ -1,0 +1,2 @@
+class CommentStr(str):
+    pass
