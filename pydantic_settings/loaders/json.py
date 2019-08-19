@@ -248,18 +248,20 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     )
 
 
-_cell_set_template_code = _make_cell_set_template_code()
-
-
 def _cell_set(cell, value):
     """
     Set the value of a closure cell.
     """
+    import sys
     import types
 
-    return types.FunctionType(
-        _cell_set_template_code, {}, '_cell_set_inner', (), (cell,)
-    )(value)
+    if sys.version_info < (3, 7):
+        cell_set_template_code = _make_cell_set_template_code()
+        return types.FunctionType(
+            cell_set_template_code, {}, '_cell_set_inner', (), (cell,)
+        )(value)
+    else:
+        cell.cell_contents = value
 
 
 # check that json module is compatible with our implementation
