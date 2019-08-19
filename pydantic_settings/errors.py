@@ -85,7 +85,7 @@ class LoadingValidationError(LoadingError, ValidationError):
         content: str = None,
     ):
         ValidationError.__init__(self, raw_errors)
-        super().__init__(file_path, self, content=content)
+        super().__init__(file_path, None, content=content)
 
     def per_location_errors(
         self

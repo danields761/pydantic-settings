@@ -1,9 +1,25 @@
 [tool.poetry]
 name = "pydantic-settings"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Hipster-orgazmic tool to mange application settings"
+readme = "README.md"
 authors = ["Daniel Daniels <danields761@gmail.com>"]
 license = "MIT"
+repository = "https://github.com/danields761/pydantic-settings"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet",
+]
 
 [tool.poetry.dependencies]
 python = "^3.6"
@@ -11,6 +27,7 @@ pydantic = "^0.31.1"
 pyyaml = "^5.1.2"
 tomlkit = "^0.5.5"
 typing-extensions = "^3.7.4"
+attrs = "^19.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.0.1"

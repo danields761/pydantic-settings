@@ -1,6 +1,6 @@
+import json
 from dataclasses import dataclass
 
-import toml
 from attr import dataclass as attr_dataclass
 from pydantic import BaseModel, ValidationError, MissingError
 from pytest import fixture, mark, raises
@@ -96,7 +96,7 @@ def test_complex_nested_models(model_cls):
         ),
         (
             Model4,
-            {'test_foo': "{bar = 'VAL1', baz = 'VAL2'}"},
+            {'test_foo': '{"bar": "VAL1", "baz": "VAL2"}'},
             {'foo': {'bar': 'VAL1', 'baz': 'VAL2'}},
         ),
         (
@@ -112,12 +112,12 @@ def test_complex_nested_models(model_cls):
         ),
         (
             Model6,
-            {'test_baz_bam': "{foo = 'VAL1', bar = 'VAL2'}"},
+            {'test_baz_bam': '{"foo": "VAL1", "bar": "VAL2"}'},
             {'baz': {'bam': {'foo': 'VAL1', 'bar': 'VAL2'}}},
         ),
         (
             Model6,
-            {'test_baz': "{bam = {foo = 'VAL1', bar = 'VAL2'}}"},
+            {'test_baz': '{"bam": {"foo": "VAL1", "bar": "VAL2"}}'},
             {'baz': {'bam': {'foo': 'VAL1', 'bar': 'VAL2'}}},
         ),
         (
@@ -132,7 +132,7 @@ def test_complex_nested_models(model_cls):
     ],
 )
 def test_restore_model(model_cls, input_val, result):
-    assert ModelShapeRestorer(model_cls, 'TEST', True, toml.loads).restore(
+    assert ModelShapeRestorer(model_cls, 'TEST', True, json.loads).restore(
         input_val
     ) == (result, [])
 
@@ -158,7 +158,7 @@ def test_invalid_env_var_assignment():
     assert env_undecodable_value_err.loc == ('baz',)
     assert isinstance(env_undecodable_value_err, ExtendedErrorWrapper)
     assert env_undecodable_value_err.env_loc == 'APP_BAZ'
-    assert isinstance(env_undecodable_value_err.exc, toml.TomlDecodeError)
+    assert isinstance(env_undecodable_value_err.exc, json.JSONDecodeError)
 
     assert not isinstance(missing_field_err, ExtendedErrorWrapper)
     assert missing_field_err.loc == ('baz',)

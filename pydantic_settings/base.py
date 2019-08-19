@@ -16,7 +16,7 @@ from typing import (
     Optional,
 )
 
-import toml
+import json
 from attr import has as is_attr_class
 from pydantic import BaseModel, ValidationError
 
@@ -208,8 +208,8 @@ T = TypeVar('T', bound='SettingsModel')
 class BaseSettingsModel(BaseModel):
     class Config:
         env_prefix: ClassVar[str] = 'APP'
-        complex_inline_values_decoder = toml.loads
-        build_attr_docs: bool = True
+        complex_inline_values_decoder = json.loads
+        build_attr_docs: bool = False
         override_exited_attrs_docs: bool = False
 
     def __init_subclass__(cls, **kwargs):
