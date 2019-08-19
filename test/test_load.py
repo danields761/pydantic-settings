@@ -7,7 +7,7 @@ from pydantic_settings import (
     BaseSettingsModel,
     LoadingError,
     load_settings,
-    Location,
+    FileLocation,
     LoadingValidationError,
 )
 
@@ -38,7 +38,7 @@ class Settings2(BaseSettingsModel):
             Settings,
             '{"bar": "AKA FLOAT"}',
             {'T_foo': 101},
-            [(Location(1, 9, 1, 20), FloatError)],
+            [(FileLocation(1, 9, 1, 20), FloatError)],
         ),
         (
             Settings2,
@@ -50,13 +50,16 @@ class Settings2(BaseSettingsModel):
             Settings2,
             '{"settings_list": [], "settings": {"foo": 100, "bar": "INVALID FLOAT"}, "foo": []}',
             {},
-            [(Location(1, 55, 1, 70), FloatError), (Location(1, 80, 1, 82), StrError)],
+            [
+                (FileLocation(1, 55, 1, 70), FloatError),
+                (FileLocation(1, 80, 1, 82), StrError),
+            ],
         ),
         (
             Settings2,
             '{"settings_list": [], "settings": {"foo": 100}, "foo": []}',
             {'A_SETTINGS_BAR': 'INVALID FLOAT'},
-            [('A_SETTINGS_BAR', FloatError), (Location(1, 56, 1, 58), StrError)],
+            [('A_SETTINGS_BAR', FloatError), (FileLocation(1, 56, 1, 58), StrError)],
         ),
     ],
 )

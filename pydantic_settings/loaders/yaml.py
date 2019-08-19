@@ -1,41 +1,45 @@
-from contextlib import nullcontext
-from pathlib import Path
-from typing import Union, TextIO, List
+import io
+from typing import Union, TextIO
 
 import yaml
 
+from pydantic_settings.types import ModelLocation
 from .common import (
-    Document,
-    LocationFinder,
-    Location,
-    KeyLookupError,
+    FileLocation,
+    LocationLookupError,
     MappingExpectError,
     ListExpectError,
+    FileValues,
+    ParsingError,
 )
 
 
-class _LocationFinder(LocationFinder):
+class _LocationFinder:
     def __init__(self, root_node: yaml.Node):
         self._node = root_node
 
-    def lookup_key_loc(self, key: List[Union[str, int]]) -> Location:
-        node = self._lookup_node_by_loc(key)
-        return Location(
+    def get_location(self, key: ModelLocation) -> FileLocation:
+        try:
+            node = self._lookup_node_by_loc(key)
+        except LocationLookupError as err:
+            raise KeyError(key) from err
+
+        return FileLocation(
             node.start_mark.line + 1,
             node.start_mark.column + 1,
             node.end_mark.line + 1,
             node.end_mark.column + 1,
         )
 
-    def _lookup_node_by_loc(self, key: List[Union[str, int]]) -> yaml.Node:
+    def _lookup_node_by_loc(self, key: ModelLocation) -> yaml.Node:
         curr_node = self._node
         if curr_node is None:
-            raise KeyLookupError(key, -1)
+            raise LocationLookupError(key, -1)
 
         for part_num, key_part in enumerate(key):
             new_node = curr_node
             if not isinstance(curr_node, yaml.CollectionNode):
-                raise KeyLookupError(key, part_num)
+                raise LocationLookupError(key, part_num)
             if isinstance(key_part, str):
                 if not isinstance(curr_node, yaml.MappingNode):
                     raise MappingExpectError(key, part_num)
@@ -51,7 +55,7 @@ class _LocationFinder(LocationFinder):
                     new_node = curr_node.value[key_part]
 
             if new_node is curr_node:
-                raise KeyLookupError(key, part_num)
+                raise LocationLookupError(key, part_num)
             curr_node = new_node
 
         return curr_node
@@ -59,19 +63,30 @@ class _LocationFinder(LocationFinder):
 
 def load_document(
     content: Union[str, TextIO], *, loader_cls=yaml.SafeLoader
-) -> Document:
-    if isinstance(content, (str, Path)):
-        context = open(content, 'r')
+) -> FileValues:
+    if isinstance(content, str):
+        stream = io.StringIO(content)
     else:
-        context = nullcontext(content)
+        stream = content
 
-    with context as stream:
-        loader = loader_cls(stream)
+    loader = loader_cls(stream)
+
+    try:
         root_node = loader.get_single_node()
+        values = loader.construct_document(root_node)
+    except yaml.YAMLError as err:
+        if not isinstance(err, yaml.MarkedYAMLError):
+            loc = None
+        else:
+            loc = FileLocation(
+                err.problem_mark.line + 1, err.problem_mark.column + 1, -1, -1
+            )
 
-        if root_node is None:
-            root_node = {}
+        raise ParsingError(err, loc)
 
-        return Document(
-            loader.construct_document(root_node), _LocationFinder(root_node)
-        )
+    if values is None:
+        values = {}
+    if not isinstance(values, dict):
+        raise ParsingError(ValueError('document root item must be a mapping'), None)
+
+    return FileValues(_LocationFinder(root_node), **values)

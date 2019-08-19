@@ -7,20 +7,20 @@ from pathlib import Path
 from typing import Type, TextIO, Optional, List, Union, Mapping, Tuple
 
 from pydantic import BaseModel, ValidationError
-from pydantic.error_wrappers import ErrorWrapper
 
 from pydantic_settings.base import BaseSettingsModel
 from pydantic_settings.errors import (
-    ExtendedErrorWrapper,
-    flatten_errors_wrappers,
     LoadingError,
     LoadingValidationError,
     LoadingParseError,
+    with_errs_locations,
 )
-from pydantic_settings.loaders import Document, get_loader, KeyLookupError, LoaderMeta
+from pydantic_settings.loaders import get_loader, LoaderMeta, ParsingError, FileValues
+from pydantic_settings.types import Json, FlatMapValues
+from pydantic_settings.utils import deep_merge_mappings
 
 
-def _lookup_loader(
+def _lookup_loaders(
     file_or_path: Union[TextIO, str, Path], type_hint: str = None
 ) -> Tuple[List[LoaderMeta], Path, str]:
     try_loaders: List[LoaderMeta] = []
@@ -82,37 +82,29 @@ def load_settings(
     """
     # prepare list of loaders based on file such parameters
     # as file extension and given type hint
-    try_loaders, file_path, content = _lookup_loader(file_or_path, type_hint)
+    try_loaders, file_path, content = _lookup_loaders(file_or_path, type_hint)
 
     # try loaders until valid result will be returned
-    document: Optional[Document] = None
+    file_values: Optional[FileValues] = None
     errors_while_trying: List[Exception] = []
     for attempt, loader_desc in enumerate(try_loaders, 1):
         try:
-            document = loader_desc.load(content)
-        except loader_desc.root_exc as e:
+            file_values = loader_desc.values_loader(content)
+            break
+        except ParsingError as err:
             errors_while_trying.append(
                 LoadingParseError(
                     file_path,
-                    e,
+                    err.cause,
                     f'parsing exception occurs in loader of "{loader_desc.name}" type',
-                    location=loader_desc.get_err_loc(e),
+                    location=err.file_location,
                     loader=loader_desc,
                 )
             )
             continue
-        except FileNotFoundError:
-            raise LoadingError(file_path, msg='file not found')
 
-        if document.content is not None and not isinstance(document.content, dict):
-            errors_while_trying.append(
-                LoadingError(file_path, msg='value at root must be a dictionary')
-            )
-        else:
-            break
-
-    assert document is not None or len(errors_while_trying) > 0
-    if len(errors_while_trying) and document is None:
+    assert file_values is not None or len(errors_while_trying) > 0
+    if len(errors_while_trying) and file_values is None:
         raise LoadingError(
             file_path,
             msg='some loaders being tried, but all failed',
@@ -120,29 +112,24 @@ def load_settings(
         )
 
     # construct object
-    document_content = document.content or {}
+    document_content = file_values
+
+    # prepare environment values
+    env_values: Optional[FlatMapValues] = None
+    if load_env:
+        # TODO: ignore env vars restoration errors so far
+        env_values, _ = cls.shape_restorer.restore(_environ or os_environ)
+        document_content = deep_merge_mappings(document_content, env_values)
+
     try:
-        if load_env:
-            result = cls.from_env(_environ or os_environ, **document_content)
-        else:
-            result = cls(**document_content)
-    except ValidationError as e:
-        assert len(e.raw_errors) > 0
+        result = cls(**document_content)
+    except ValidationError as err:
+        assert len(err.raw_errors) > 0
 
-        errs: List[ErrorWrapper] = []
-        for raw_err in flatten_errors_wrappers(e.raw_errors):
-            if not isinstance(raw_err, ExtendedErrorWrapper):
-                try:
-                    loc = document.location_finder.lookup_key_loc(raw_err.loc)
-                    raw_err = ExtendedErrorWrapper.from_error_wrapper(
-                        raw_err, text_loc=loc
-                    )
-                except KeyLookupError:
-                    # i not really sure what to do with such errors
-                    # theoretically they should never happen
-                    pass
-            errs.append(raw_err)
+        new_err = with_errs_locations(err, file_values)
+        if env_values is not None:
+            new_err = with_errs_locations(new_err, env_values)
 
-        raise LoadingValidationError(errs, file_path, content) from e
+        raise LoadingValidationError(new_err.raw_errors, file_path, content) from err
 
     return result

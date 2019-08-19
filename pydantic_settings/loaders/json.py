@@ -6,14 +6,14 @@ from typing import Tuple, Callable, Any, List, Union, TextIO, Dict
 
 from attr import dataclass
 
-from ..types import Json
+from pydantic_settings.types import Json, ModelLocation
 from .common import (
-    Location,
-    LocationFinder,
-    Document,
-    KeyLookupError,
+    FileLocation,
+    LocationLookupError,
     MappingExpectError,
     ListExpectError,
+    FileValues,
+    ParsingError,
 )
 
 
@@ -35,7 +35,7 @@ def _create_object_hook(original_value):
 
         return (
             ASTItem(
-                location=Location(
+                location=FileLocation(
                     line=s.count('\n', None, end) + 1,
                     col=col,
                     end_line=s.count('\n', None, new_end) + 1,
@@ -51,14 +51,14 @@ def _create_object_hook(original_value):
 
 @dataclass
 class ASTItem:
-    location: Location
+    location: FileLocation
     value: 'AstJsonLike'
 
     @classmethod
     def create(
         cls, line: int, col: int, end_line: int, end_col: int, val: 'AstJsonLike'
     ) -> 'ASTItem':
-        return ASTItem(Location(line, col, end_line, end_col), val)
+        return ASTItem(FileLocation(line, col, end_line, end_col), val)
 
     def get_json_value(self) -> Json:
         if isinstance(self.value, list):
@@ -91,7 +91,7 @@ def _create_scanner_wrapper(
                 f'unexpected value has been returned from scanner: "{val}" of type {type(val)}'
             )
 
-        return ASTItem(Location(line, col, line, end_col), val), end
+        return ASTItem(FileLocation(line, col, line, end_col), val), end
 
     return wrapper
 
@@ -129,12 +129,55 @@ class ASTDecoder(json.JSONDecoder):
 
         self.scan_once = _create_scanner_wrapper(cell.cell_contents)
         # Function closure cells read-only before python 3.7,
-        # here using
+        # here using one approach found on internet ...
         _cell_set(cell, self.scan_once)
 
 
 load = partial(json.load, cls=ASTDecoder)
 loads = partial(json.loads, cls=ASTDecoder)
+
+
+def load_document(content: Union[str, TextIO]) -> FileValues:
+    try:
+        if isinstance(content, str):
+            tree = loads(content)
+        else:
+            tree = load(content)
+    except json.JSONDecodeError as err:
+        raise ParsingError(err, FileLocation(err.lineno, err.colno, -1, -1))
+
+    if not isinstance(tree.value, dict):
+        raise ParsingError(ValueError('document root item must be a mapping'), None)
+
+    return FileValues(_LocationFinder(tree), **tree.get_json_value())
+
+
+class _LocationFinder:
+    def __init__(self, root_item: ASTItem):
+        self.root_item = root_item
+
+    def get_location(self, key: ModelLocation) -> FileLocation:
+        try:
+            return self._get_location(key)
+        except LocationLookupError as err:
+            # in case of this error __causer__ field will be populated
+            # with more specific error, so it might help during debugging
+            raise KeyError(key) from err
+
+    def _get_location(self, key: ModelLocation) -> FileLocation:
+        curr_item = self.root_item
+        for i, key_part in enumerate(key):
+            if isinstance(key_part, int) and not isinstance(curr_item.value, list):
+                raise ListExpectError(key, i)
+            elif isinstance(key_part, str) and not isinstance(curr_item.value, dict):
+                raise MappingExpectError(key, i)
+
+            try:
+                curr_item = curr_item.value[key_part]
+            except (KeyError, IndexError):
+                raise LocationLookupError(key, i)
+
+        return curr_item.location
 
 
 def _make_cell_set_template_code():
@@ -219,36 +262,7 @@ def _cell_set(cell, value):
     )(value)
 
 
-def load_document(content: Union[str, TextIO]) -> Document:
-    if isinstance(content, str):
-        tree = loads(content)
-    else:
-        tree = load(content)
-
-    return Document(tree.get_json_value(), _LocationFinder(tree))
-
-
-class _LocationFinder(LocationFinder):
-    def __init__(self, root_item: ASTItem):
-        self.root_item = root_item
-
-    def lookup_key_loc(self, key: List[Union[str, int]]) -> Location:
-        curr_item = self.root_item
-        for i, key_part in enumerate(key):
-            if isinstance(key, int) and not isinstance(curr_item.value, list):
-                raise ListExpectError(key, i)
-            elif not isinstance(curr_item.value, dict):
-                raise MappingExpectError(key, i)
-
-            try:
-                curr_item = curr_item.value[key_part]
-            except (KeyError, IndexError):
-                raise KeyLookupError(key, i)
-
-        return curr_item.location
-
-
-# check that json module is compatible with out implementation
+# check that json module is compatible with our implementation
 def _check_capability():
     ASTDecoder()
 

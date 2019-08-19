@@ -19,23 +19,44 @@ from typing import (
 import toml
 from attr import has as is_attr_class
 from pydantic import BaseModel, ValidationError
-from pydantic.error_wrappers import ErrorWrapper
 
-from pydantic_settings.errors import ExtendedErrorWrapper, flatten_errors_wrappers
 from pydantic_settings.attrs_docs import apply_attributes_docs
-from pydantic_settings.types import AnyModelType
+from pydantic_settings.errors import ExtendedErrorWrapper, with_errs_locations
+from pydantic_settings.types import (
+    AnyModelType,
+    ModelLocation,
+    Json,
+    JsonDict,
+    FlatMapValues,
+)
+from pydantic_settings.utils import deep_merge_mappings
 
 
 _RecStrDictValue = Union['_RecStrDict', str]
 _RecStrDict = Dict[str, _RecStrDictValue]
-_NestedMappingPath = Tuple[Sequence[str], bool]
+_NestedMappingPath = Tuple[Sequence[str], bool, bool]
 
 
-def _is_determined_complex_field(field_type: Any):
+def _is_determined_complex_field(field_type: Any) -> bool:
+    """Returns flag indicates that field of given type have known set of child fields"""
     return (
         is_attr_class(field_type)
         or is_dataclass(field_type)
         or (isinstance(field_type, type) and issubclass(field_type, BaseModel))
+    )
+
+
+def _estimate_field_complexity(field_type: Any) -> Tuple[bool, bool]:
+    if _is_determined_complex_field(field_type):
+        return True, True
+    if not hasattr(field_type, '__origin__') or field_type.__origin__ is not Union:
+        return False, False
+
+    return (
+        True,
+        all(
+            not _is_determined_complex_field(subtype) for subtype in field_type.__args__
+        ),
     )
 
 
@@ -50,22 +71,22 @@ def _list_fields(model: AnyModelType) -> Iterator[Tuple[str, Type]]:
         for field in model.__dataclass_fields__.values():
             yield field.name, field.type
     else:
-        raise TypeError("values isn't a model type")
+        raise TypeError("value isn't a model type")
 
 
 def _traveler(
     model: Type[AnyModelType],
     prefix: str,
-    loc: Tuple[str],
+    loc: Tuple[str, ...],
     case_reducer: Callable[[str], str],
 ) -> Iterator[Tuple[str, _NestedMappingPath]]:
     for field_name, field_type in _list_fields(model):
         upper_field_name = case_reducer(field_name)
         new_prefix = f'{prefix}_{upper_field_name}'
         new_loc = loc + (field_name,)
-        is_complex_field = _is_determined_complex_field(field_type)
-        yield new_prefix, (new_loc, is_complex_field)
-        if is_complex_field:
+        is_complex, is_only_complex = _estimate_field_complexity(field_type)
+        yield new_prefix, (new_loc, is_complex, is_only_complex)
+        if is_complex:
             yield from _traveler(
                 cast(AnyModelType, field_type), new_prefix, new_loc, case_reducer
             )
@@ -84,12 +105,27 @@ class InvalidAssignError(ValueError):
 
 
 class AssignBeyondSimpleValueError(InvalidAssignError):
+    """
+    Signals that some value arrives for some deep location after a
+    simple value for this location parent, e.g. that sequence of
+    items [('FOO_BAR', 1), ('FOO_BAR_BAZ', 2')] will cause this error.
+    """
+
     pass
 
 
-class FlatMapRestorer(object):
+class ModelShapeRestorer(object):
     """
-    Restores flattened nested mapping, as example
+    Restores flattened mapping to a model shape for a flat-map where keys satisfies that rule:
+
+    >>> def get_flat_map_key(prefix: str, nested_location: Sequence[Union[str, int]]) -> str:
+    ...     return prefix + '_' + '_'.join(str(part) for part in nested_location)
+
+    Where `prefix` - some arbitrary prefix, mostly aimed to separate different namespaces, `loc` - a sequence
+    of keys and indexes, by which desired value may be addressed inside model and her nested fields. Also there is
+    possibility to make flat-map key case insensitive.
+
+    Currently, settings nested value inside of any sequence isn't supported.
     """
 
     def __init__(
@@ -106,73 +142,64 @@ class FlatMapRestorer(object):
         )
         self._dead_end_resolver = dead_end_value_resolver
 
-    def apply_values(
-        self, target: Any, flat_map: Mapping[str, str]
-    ) -> Tuple[Dict[Sequence[str], str], Sequence[InvalidAssignError]]:
+    def restore(
+        self, flat_map: Mapping[str, str]
+    ) -> Tuple['FlatMapValues', Optional[Sequence[InvalidAssignError]]]:
+        target: Dict[str, Json] = {}
         errs: List[InvalidAssignError] = []
-        consumed: Dict[Sequence[str], str] = {}
+        consumed: Dict[ModelLocation, str] = {}
         for orig_key, val in flat_map.items():
             key = self._case_reducer(orig_key)
             if not key.startswith(self._prefix):
                 continue
             try:
-                path, is_complex = self._model_flat_map[key]
+                path, is_complex, is_only_complex = self._model_flat_map[key]
             except KeyError:
                 continue
             try:
-                self._apply_path_value(target, path, is_complex, orig_key, val)
+                self._apply_path_value(
+                    target, path, is_complex, is_only_complex, orig_key, val
+                )
             except InvalidAssignError as e:
                 errs.append(e)
             else:
                 consumed[tuple(path)] = orig_key
 
-        return consumed, errs
-
-    @staticmethod
-    def _get_getter_setter(
-        obj: Any
-    ) -> Tuple[Callable[[Any, str, Any], None], Callable[[Any, str], Any]]:
-        if hasattr(obj, '__setitem__') and hasattr(obj, '__getitem__'):
-            return type(obj).__setitem__, type(obj).__getitem__
-        else:
-            return setattr, getattr
+        return FlatMapValues(consumed, **target), errs
 
     def _apply_path_value(
         self,
-        root: Any,
+        root: JsonDict,
         path: Sequence[str],
         is_complex: bool,
+        is_only_complex: bool,
         orig_key: str,
         value: str,
     ):
         curr_segment: Any = root
         for path_part in path[:-1]:
-            setter, getter = self._get_getter_setter(curr_segment)
-
             try:
-                new_segment = getter(curr_segment, path_part)
+                next_segment = curr_segment[path_part]
             except KeyError:
-                new_segment = {}
-                setter(curr_segment, path_part, new_segment)
+                next_segment = {}
+                curr_segment[path_part] = next_segment
 
-            if isinstance(new_segment, str):
+            if isinstance(next_segment, str):
                 try:
-                    new_segment = self._dead_end_resolver(curr_segment)
-                    setter(curr_segment, path_part, new_segment)
+                    next_segment = self._dead_end_resolver(curr_segment)
                 except (ValueError, TypeError) as e:
-                    # that mechanism should be reworked, because target field may decode
-                    # string values by itself
-                    raise InvalidAssignError(path, orig_key) from e
+                    raise AssignBeyondSimpleValueError(path, orig_key) from e
+                curr_segment[path_part] = next_segment
 
-            curr_segment = new_segment
+            curr_segment = next_segment
 
         if is_complex:
             try:
                 value = self._dead_end_resolver(value)
             except (ValueError, KeyError) as e:
-                raise InvalidAssignError(path, orig_key) from e
-        setter, _ = self._get_getter_setter(curr_segment)
-        setter(curr_segment, path[-1], value)
+                if is_only_complex:
+                    raise InvalidAssignError(path, orig_key) from e
+        curr_segment[path[-1]] = value
 
 
 T = TypeVar('T', bound='SettingsModel')
@@ -185,11 +212,9 @@ class BaseSettingsModel(BaseModel):
         build_attr_docs: bool = True
         override_exited_attrs_docs: bool = False
 
-    _FLAT_NAMES_MAPPER_MAP: ClassVar[Dict[str, Sequence[str]]] = {}
-
     def __init_subclass__(cls, **kwargs):
         config = cast(cls.Config, cls.__config__)
-        cls._restorer = FlatMapRestorer(
+        cls.shape_restorer = ModelShapeRestorer(
             cls, config.env_prefix, True, config.complex_inline_values_decoder
         )
         if config.build_attr_docs:
@@ -199,45 +224,27 @@ class BaseSettingsModel(BaseModel):
 
     @classmethod
     def from_env(cls: Type[T], environ: Mapping[str, str], **vals: Any) -> T:
-        env_vars_applied, env_apply_errs = cls._restorer.apply_values(vals, environ)
+        env_vars_applied, env_apply_errs = cls.shape_restorer.restore(environ)
         try:
-            res = cls(**vals)
-        except ValidationError as e:
-            validation_err = e
-        else:
+            res = cls(**deep_merge_mappings(env_vars_applied, vals))
             validation_err = None
+        except ValidationError as err:
+            res = None
+            validation_err = err
 
-        if env_apply_errs or validation_err:
-            raise cls._combine_errors(env_apply_errs, validation_err, env_vars_applied)
+        if len(env_apply_errs) > 0:
+            env_errs_as_ew = [
+                ExtendedErrorWrapper(
+                    env_err.__cause__, loc=tuple(env_err.loc), env_loc=env_err.key
+                )
+                for env_err in env_apply_errs
+            ]
+            if validation_err is not None:
+                validation_err.raw_errors += env_errs_as_ew
+            else:
+                validation_err = ValidationError(env_errs_as_ew)
+
+        if validation_err:
+            raise with_errs_locations(validation_err, env_vars_applied)
 
         return res
-
-    def with_env(self, environ: Mapping[str, str]):
-        return self.from_env(environ, **self.dict())
-
-    @staticmethod
-    def _combine_errors(
-        env_apply_errs: Sequence[InvalidAssignError],
-        validation_err: Optional[ValidationError],
-        env_vars_applied: Dict[Sequence[str], str],
-    ) -> Optional[ValidationError]:
-        err_wrappers: List[ErrorWrapper] = [
-            ExtendedErrorWrapper(
-                env_err.__cause__, loc=tuple(env_err.loc), env_loc=env_err.key
-            )
-            for env_err in env_apply_errs
-        ]
-        if validation_err is not None:
-            err_wrappers += [
-                ExtendedErrorWrapper.from_error_wrapper(raw_err, env_loc=err_env_loc)
-                if err_env_loc is not None
-                else raw_err
-                for raw_err, err_env_loc in (
-                    (raw_err, env_vars_applied.get(raw_err.loc))
-                    for raw_err in flatten_errors_wrappers(validation_err.raw_errors)
-                )
-            ]
-        if len(err_wrappers) == 0:
-            return None
-
-        return ValidationError(err_wrappers)

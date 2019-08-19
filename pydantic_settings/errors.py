@@ -1,10 +1,12 @@
 from pathlib import Path
-from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterable
+from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterable, List
 
 from pydantic import ValidationError
 from pydantic.error_wrappers import ErrorWrapper
 
-from pydantic_settings.loaders import Location, LoaderMeta
+from pydantic_settings.types import FlatMapValues, ModelLocationGetter
+from pydantic_settings.loaders import FileLocation, LoaderMeta
+from pydantic_settings.loaders.common import FileValues, LocationLookupError
 
 
 class LoadingError(ValueError):
@@ -57,10 +59,15 @@ class LoadingParseError(LoadingError):
     """
 
     def __init__(
-        self, *args: Any, loader: LoaderMeta = None, location: Location = None, **kwargs
+        self,
+        *args: Any,
+        loader: LoaderMeta = None,
+        location: FileLocation = None,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.location = location
+        self.loader = loader
 
 
 class LoadingValidationError(LoadingError, ValidationError):
@@ -80,7 +87,9 @@ class LoadingValidationError(LoadingError, ValidationError):
         ValidationError.__init__(self, raw_errors)
         super().__init__(file_path, self, content=content)
 
-    def per_location_errors(self) -> Iterable[Tuple[Union[str, Location], Exception]]:
+    def per_location_errors(
+        self
+    ) -> Iterable[Tuple[Union[str, FileLocation], Exception]]:
         return (
             (raw_err.env_loc or raw_err.text_loc, raw_err.exc)
             for raw_err in self.raw_errors
@@ -100,7 +109,7 @@ class ExtendedErrorWrapper(ErrorWrapper):
         self,
         *args: Any,
         env_loc: str = None,
-        text_loc: Location = None,
+        text_loc: FileLocation = None,
         content: str = None,
         **kwargs: Any,
     ):
@@ -115,7 +124,7 @@ class ExtendedErrorWrapper(ErrorWrapper):
         err_wrapper: ErrorWrapper,
         *,
         env_loc: str = None,
-        text_loc: Location = None,
+        text_loc: FileLocation = None,
     ) -> 'ExtendedErrorWrapper':
         """
         Alternative constructor trying to make copying faster
@@ -156,3 +165,27 @@ def flatten_errors_wrappers(
             yield from flatten_errors_wrappers(error)
         else:
             raise RuntimeError(f'Unknown error object: {error}')
+
+
+def with_errs_locations(
+    validation_err: ValidationError,
+    values_source: ModelLocationGetter[Union[str, FileLocation]],
+) -> ValidationError:
+    err_wrappers: List[ErrorWrapper] = []
+    for raw_err in flatten_errors_wrappers(validation_err.raw_errors):
+        try:
+            location = values_source.get_location(raw_err.loc)
+            raw_err = ExtendedErrorWrapper.from_error_wrapper(
+                raw_err,
+                **(
+                    {'text_loc': location}
+                    if isinstance(location, FileLocation)
+                    else {'env_loc': location}
+                ),
+            )
+        except KeyError:
+            pass
+
+        err_wrappers.append(raw_err)
+
+    return ValidationError(err_wrappers)
