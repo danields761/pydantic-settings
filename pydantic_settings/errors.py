@@ -4,32 +4,39 @@ from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterab
 from pydantic import ValidationError
 from pydantic.error_wrappers import ErrorWrapper
 
-from pydantic_settings.types import FlatMapValues, ModelLocationGetter
 from pydantic_settings.loaders import FileLocation, LoaderMeta
-from pydantic_settings.loaders.common import FileValues, LocationLookupError
+from pydantic_settings.types import SourceLocationProvider
 
 
 class LoadingError(ValueError):
     """
     Indicates that configuration file couldn't be loaded for some reason, which is
     described by error causer, human-readable message or set of another errors
-
-    # TODO errors are still not representative, must be advanced or reworked
     """
+
+    file_path: Optional[Path]
+    """Source file path, or none if in-memory string used"""
+
+    cause: Optional[Exception]
+    """Cause of error (used instead of __cause__ attribute)"""
+
+    msg: Optional[str]
+    """Optional error message"""
+
+    content: Optional[str]
+    """Settings content"""
 
     def __init__(
         self,
         file_path: Optional[Path],
         cause: Exception = None,
         msg: str = None,
-        errs: Iterable[Exception] = None,
         content: str = None,
     ):
-        self.args = self.file_path, self.cause, self.msg, self.errs, self.content = (
+        self.args = self.file_path, self.cause, self.msg, self.content = (
             file_path,
             cause,
             msg,
-            errs,
             content,
         )
 
@@ -46,10 +53,10 @@ class LoadingError(ValueError):
         development.
 
         :param print_file_snippets: print snippets of a error helping to locate it (
-        see *NOTE* section) :param snippet_take_lines: how much lines up and down
-        file snippet will take :return: rendered text string
+        see *NOTE* section)
+        :param snippet_take_lines: how much lines up and down file snippet will take
+        :return: rendered text string
         """
-        # TODO
         raise NotImplementedError
 
 
@@ -69,14 +76,19 @@ class LoadingParseError(LoadingError):
         self.location = location
         self.loader = loader
 
+    def render_error(
+        self, *, print_file_snippets: bool = False, snippet_take_lines: int = 3
+    ) -> str:
+        raise NotImplementedError
+
 
 class LoadingValidationError(LoadingError, ValidationError):
     """
-    Joins pydantic `ValidationError` and config loader error, primarily to allow
-    catching either general load error or validation errors independently, when required
+    Joins pydantic `ValidationError` and `LoadingError`, primarily to allow
+    catching specific for `load_settings` function errors at once
     """
 
-    __slots__ = 'file_path', 'cause', 'msg', 'errs', 'content'
+    __slots__ = 'file_path', 'cause', 'msg', 'content'
 
     def __init__(
         self,
@@ -96,6 +108,11 @@ class LoadingValidationError(LoadingError, ValidationError):
             if isinstance(raw_err, ExtendedErrorWrapper)
         )
 
+    def render_error(
+        self, *, print_file_snippets: bool = False, snippet_take_lines: int = 3
+    ) -> str:
+        raise NotImplementedError
+
 
 class ExtendedErrorWrapper(ErrorWrapper):
     """
@@ -104,6 +121,15 @@ class ExtendedErrorWrapper(ErrorWrapper):
     """
 
     __slots__ = 'env_loc', 'text_loc', 'content'
+
+    env_loc: Optional[str]
+    """Environment variable which provides bad value"""
+
+    text_loc: Optional[FileLocation]
+    """Text location of a bad value"""
+
+    content: str
+    """Text content"""
 
     def __init__(
         self,
@@ -145,7 +171,7 @@ class ExtendedErrorWrapper(ErrorWrapper):
         return d
 
 
-def flatten_errors_wrappers(
+def _flatten_errors_wrappers(
     errors: Sequence[Any], *, loc: Optional[Sequence[Union[str, int]]] = None
 ) -> Iterator[ErrorWrapper]:
     """
@@ -157,22 +183,22 @@ def flatten_errors_wrappers(
         if isinstance(error, ErrorWrapper):
             error_loc = tuple(loc) + error.loc
             if isinstance(error.exc, ValidationError):
-                yield from flatten_errors_wrappers(error.exc.raw_errors, loc=error_loc)
+                yield from _flatten_errors_wrappers(error.exc.raw_errors, loc=error_loc)
             else:
                 error.loc = error_loc
                 yield error
         elif isinstance(error, list):
-            yield from flatten_errors_wrappers(error)
+            yield from _flatten_errors_wrappers(error)
         else:
             raise RuntimeError(f'Unknown error object: {error}')
 
 
 def with_errs_locations(
     validation_err: ValidationError,
-    values_source: ModelLocationGetter[Union[str, FileLocation]],
+    values_source: SourceLocationProvider[Union[str, FileLocation]],
 ) -> ValidationError:
     err_wrappers: List[ErrorWrapper] = []
-    for raw_err in flatten_errors_wrappers(validation_err.raw_errors):
+    for raw_err in _flatten_errors_wrappers(validation_err.raw_errors):
         try:
             location = values_source.get_location(raw_err.loc)
             raw_err = ExtendedErrorWrapper.from_error_wrapper(

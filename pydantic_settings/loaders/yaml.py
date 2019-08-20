@@ -29,6 +29,8 @@ class _LocationFinder:
             node.start_mark.column + 1,
             node.end_mark.line + 1,
             node.end_mark.column + 1,
+            node.start_mark.pointer,
+            node.end_mark.pointer,
         )
 
     def _lookup_node_by_loc(self, key: ModelLocation) -> yaml.Node:
@@ -79,7 +81,12 @@ def load_document(
             loc = None
         else:
             loc = FileLocation(
-                err.problem_mark.line + 1, err.problem_mark.column + 1, -1, -1
+                err.problem_mark.line + 1,
+                err.problem_mark.column + 1,
+                -1,
+                -1,
+                err.problem_mark.pointer,
+                -1,
             )
 
         raise ParsingError(err, loc)

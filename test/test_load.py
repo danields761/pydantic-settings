@@ -1,7 +1,10 @@
-from pytest import mark, raises
+import tempfile
+from io import StringIO
+from pathlib import Path
+from typing import List
 
 from pydantic import IntegerError, FloatError, StrError
-from typing import List
+from pytest import mark, raises
 
 from pydantic_settings import (
     BaseSettingsModel,
@@ -38,7 +41,7 @@ class Settings2(BaseSettingsModel):
             Settings,
             '{"bar": "AKA FLOAT"}',
             {'T_foo': 101},
-            [(FileLocation(1, 9, 1, 20), FloatError)],
+            [(FileLocation(1, 9, 1, 20, 9, 19), FloatError)],
         ),
         (
             Settings2,
@@ -51,15 +54,18 @@ class Settings2(BaseSettingsModel):
             '{"settings_list": [], "settings": {"foo": 100, "bar": "INVALID FLOAT"}, "foo": []}',
             {},
             [
-                (FileLocation(1, 55, 1, 70), FloatError),
-                (FileLocation(1, 80, 1, 82), StrError),
+                (FileLocation(1, 55, 1, 70, 55, 69), FloatError),
+                (FileLocation(1, 80, 1, 82, 80, 81), StrError),
             ],
         ),
         (
             Settings2,
             '{"settings_list": [], "settings": {"foo": 100}, "foo": []}',
             {'A_SETTINGS_BAR': 'INVALID FLOAT'},
-            [('A_SETTINGS_BAR', FloatError), (FileLocation(1, 56, 1, 58), StrError)],
+            [
+                ('A_SETTINGS_BAR', FloatError),
+                (FileLocation(1, 56, 1, 58, 56, 57), StrError),
+            ],
         ),
     ],
 )
@@ -76,3 +82,54 @@ def test_validation_errors(model_cls, content, environ, locations):
     assert [type(err) for _, err in exc_info.value.per_location_errors()] == [
         err_cls for _, err_cls in locations
     ]
+
+
+def empty_tmp_file_creator(extension):
+    def create():
+        p = Path(tempfile.mktemp('.' + extension))
+        p.touch()
+        return p
+
+    return create
+
+
+@mark.parametrize(
+    'any_content, type_hint, expect_err_msg',
+    [
+        (
+            empty_tmp_file_creator('cfg'),
+            None,
+            'unable to find suitable loader, hints used: file extension ".cfg"',
+        ),
+        ('', 'ini', 'unable to find suitable loader, hints used: type hint "ini"'),
+        (
+            StringIO(''),
+            'ini',
+            'unable to find suitable loader, hints used: type hint "ini"',
+        ),
+        (
+            empty_tmp_file_creator('cfg'),
+            'DEFINITELY NOT A TYPE HINT',
+            'unable to find suitable loader, hints used: file extension ".cfg", type hint "DEFINITELY NOT A TYPE HINT"',
+        ),
+    ],
+)
+def test_loader_lookup_errors(any_content, type_hint, expect_err_msg):
+    if callable(any_content):
+        any_content = any_content()
+
+    with raises(LoadingError) as err_info:
+        load_settings(Settings2, any_content, type_hint=type_hint)
+
+    assert err_info.value.msg == expect_err_msg
+
+
+def test_file_not_found():
+    path = Path(tempfile.mktemp())
+    with raises(LoadingError) as err_info:
+        load_settings(Settings2, path)
+
+    assert isinstance(err_info.value.cause, FileNotFoundError)
+    assert err_info.value.msg == 'file not found'
+    assert err_info.value.content is None
+    assert err_info.value.file_path == path

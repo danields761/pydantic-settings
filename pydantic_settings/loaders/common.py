@@ -1,8 +1,8 @@
-from typing import Union, Callable, TextIO, Dict, Optional
+from typing import Dict, Optional
 
 from attr import dataclass
 
-from pydantic_settings.types import Json, ModelLocation, ModelLocationGetter
+from pydantic_settings.types import Json, ModelLocation, SourceLocationProvider
 
 
 @dataclass
@@ -12,8 +12,8 @@ class FileLocation:
     end_line: int
     end_col: int
 
-    def get_snippet(self) -> str:
-        raise NotImplementedError
+    pos: int
+    end_pos: int
 
 
 @dataclass
@@ -40,22 +40,27 @@ class ListExpectError(LocationLookupError):
 class FileValues(Dict[str, Json]):
     __slots__ = ('location_finder',)
 
-    def __init__(self, finder: ModelLocationGetter[FileLocation], **values: Json):
+    def __init__(self, finder: SourceLocationProvider[FileLocation], **values: Json):
         super().__init__(**values)
         self.location_finder = finder
 
     def get_location(self, val_loc: ModelLocation) -> FileLocation:
         """
-        Maps model location to file location.
+        Maps model location to a file location.
 
-        As example, files defines something equal to "{'foo': {'bar': [1, 2]}}", and we assuming that first
-        value in the list is't correct and doesn't satisfies some condition. Here we might
-        call `file_values.get_location(['foo', 'bar', 0])` and retrieve point, where value begins and ends.
+        As example, files defines something equal to :code:`{'foo': {'bar': [1, 2]}}`,
+        and we assuming that first value in the list is't correct and doesn't
+        satisfies some condition. Here we might call
 
-        :param val_loc: values location described as sequence of keys and reducing it over root container with
-        `__getitem__` callable we will access final value
-        :raises KeyError: in case if model location could not be found inside file, e.g. value not
-        provided by file
+        .. code-block
+            `file_values.get_location(['foo', 'bar', 0])`
+
+        and retrieve point, where value begins and ends.
+
+        :param val_loc: values location described as sequence of keys and reducing it
+        over root container with :code:`__getitem__` callable we will access final value
+        :raises KeyError: in case if model location could not be found inside file,
+        e.g. value not provided by file
         :return: file location description
         """
         return self.location_finder.get_location(val_loc)
@@ -63,18 +68,14 @@ class FileValues(Dict[str, Json]):
 
 class ParsingError(ValueError):
     """
-    General wrapper for file parsing errors which also provides error location inside file
+    General wrapper for file parsing errors which also provides error location inside
+    a source.
 
     :var cause: error causer
-    :var file_location: error location inside file, in case if None, relates to whole file
+    :var file_location: error location inside file, in case if None, relates to whole
+    file
     """
 
     def __init__(self, cause: Exception, file_location: FileLocation = None):
         self.cause = cause
         self.file_location: Optional[FileLocation] = file_location
-
-
-@dataclass
-class LoaderMeta:
-    name: str
-    values_loader: Callable[[Union[str, TextIO]], FileValues]

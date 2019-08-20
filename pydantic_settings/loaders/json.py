@@ -1,5 +1,6 @@
 import json
 import json.scanner
+import copy
 from functools import partial, wraps
 
 from typing import Tuple, Callable, Any, List, Union, TextIO, Dict
@@ -40,6 +41,8 @@ def _create_object_hook(original_value):
                     col=col,
                     end_line=s.count('\n', None, new_end) + 1,
                     end_col=end_col,
+                    pos=end,
+                    end_pos=new_end,
                 ),
                 value=value,
             ),
@@ -56,9 +59,18 @@ class ASTItem:
 
     @classmethod
     def create(
-        cls, line: int, col: int, end_line: int, end_col: int, val: 'AstJsonLike'
+        cls,
+        line: int,
+        col: int,
+        end_line: int,
+        end_col: int,
+        val: 'AstJsonLike',
+        pos: int = None,
+        end_pos: int = None,
     ) -> 'ASTItem':
-        return ASTItem(FileLocation(line, col, end_line, end_col), val)
+        return ASTItem(
+            FileLocation(line, col, end_line, end_col, pos or 0, end_pos or 0), val
+        )
 
     def get_json_value(self) -> Json:
         if isinstance(self.value, list):
@@ -91,7 +103,7 @@ def _create_scanner_wrapper(
                 f'unexpected value has been returned from scanner: "{val}" of type {type(val)}'
             )
 
-        return ASTItem(FileLocation(line, col, line, end_col), val), end
+        return ASTItem(FileLocation(line, col, line, end_col, idx, end), val), end
 
     return wrapper
 
@@ -109,11 +121,12 @@ class ASTDecoder(json.JSONDecoder):
         )
         self.parse_string = lambda s, end, strict: str_parser_wrapper((s, end), strict)
 
-        # here i'am patching scanner closure, because it's internally refers for
+        # Here i'am patching scanner closure, because it's internally refers for
         # itself and it is't configurable.
-        # schema is: 'py_make_scanner' defines '_scan_once', which is referred by
-        # 'scan_once' which is result of 'py_make_scanner()' expression
-        orig_scanner = json.scanner.py_make_scanner(self)
+        # Schema is: 'py_make_scanner' defines '_scan_once', which is referred by
+        # 'scan_once' which is result of 'py_make_scanner()' expression.
+        # Also copy scanner function here, just in case.
+        orig_scanner = copy.deepcopy(json.scanner.py_make_scanner(self))
         try:
             cell = next(
                 cell
@@ -144,7 +157,9 @@ def load_document(content: Union[str, TextIO]) -> FileValues:
         else:
             tree = load(content)
     except json.JSONDecodeError as err:
-        raise ParsingError(err, FileLocation(err.lineno, err.colno, -1, -1))
+        raise ParsingError(
+            err, FileLocation(err.lineno, err.colno, -1, -1, err.pos, -1)
+        )
 
     if not isinstance(tree.value, dict):
         raise ParsingError(ValueError('document root item must be a mapping'), None)
@@ -182,38 +197,38 @@ class _LocationFinder:
 
 def _make_cell_set_template_code():
     """
-This module was extracted from the `cloud` package, developed by
-PiCloud, Inc.
+    This module was extracted from the `cloud` package, developed by
+    PiCloud, Inc.
 
-Copyright (c) 2015, Cloudpickle contributors.
-Copyright (c) 2012, Regents of the University of California.
-Copyright (c) 2009 PiCloud, Inc. http://www.picloud.com.
-All rights reserved.
+    Copyright (c) 2015, Cloudpickle contributors.
+    Copyright (c) 2012, Regents of the University of California.
+    Copyright (c) 2009 PiCloud, Inc. http://www.picloud.com.
+    All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of the University of California, Berkeley nor the
-      names of its contributors may be used to endorse or promote
-      products derived from this software without specific prior written
-      permission.
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * Neither the name of the University of California, Berkeley nor the
+          names of its contributors may be used to endorse or promote
+          products derived from this software without specific prior written
+          permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
-TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+    TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Docs stripped, borrowed from here
     https://github.com/cloudpipe/cloudpickle/pull/90/files#diff-d2a3618afedd4e124c532151eedbae09R74

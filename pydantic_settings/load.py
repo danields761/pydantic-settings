@@ -16,49 +16,61 @@ from pydantic_settings.errors import (
     with_errs_locations,
 )
 from pydantic_settings.loaders import get_loader, LoaderMeta, ParsingError, FileValues
-from pydantic_settings.types import Json, FlatMapValues
+from pydantic_settings.model_shape_restorer import FlatMapValues
 from pydantic_settings.utils import deep_merge_mappings
 
 
-def _lookup_loaders(
-    file_or_path: Union[TextIO, str, Path], type_hint: str = None
-) -> Tuple[List[LoaderMeta], Path, str]:
-    try_loaders: List[LoaderMeta] = []
-
-    if isinstance(file_or_path, Path):
-        file_path = Path(file_or_path)
-        content = file_path.read_text()
+def _resolve_arguments(
+    any_content: Union[TextIO, str, Path], type_hint: str = None
+) -> Tuple[LoaderMeta, Optional[Path], str]:
+    if isinstance(any_content, Path):
+        file_path = Path(any_content)
+        try:
+            content = file_path.read_text()
+        except FileNotFoundError as err:
+            raise LoadingError(file_path, err, msg='file not found')
     else:
-        if isinstance(file_or_path, StringIO):
+        if isinstance(any_content, StringIO):
             file_path = None
-            content = file_or_path.getvalue()
-        elif isinstance(file_or_path, str):
-            content = file_or_path
+            content = any_content.getvalue()
+        elif isinstance(any_content, str):
+            content = any_content
             file_path = None
         else:
-            file_path = Path(file_or_path.name)
-            content = file_path.read_text()
+            file_path = Path(any_content.name)
+            content = any_content.read()
 
     if file_path:
-        file_last_suffix = file_path.suffix
-        if file_last_suffix != '':
-            try_loaders.append(get_loader(file_last_suffix))
+        file_extension = file_path.suffix
+        if file_extension != '':
+            try:
+                return get_loader(file_extension), file_path, content
+            except TypeError:
+                pass
+    else:
+        file_extension = None
+
     if type_hint is not None:
-        type_hint_loader = get_loader(type_hint)
-        if type_hint_loader not in try_loaders:
-            try_loaders.append(type_hint_loader)
+        try:
+            return get_loader(type_hint), file_path, content
+        except TypeError:
+            pass
 
-    if len(try_loaders) == 0:
-        raise LoadingError(
-            file_path, msg='unable to find appropriate loader for file of this type'
-        )
+    err_parts: List[str] = []
+    if file_extension is not None:
+        err_parts.append(f'file extension "{file_extension}"')
+    if type_hint is not None:
+        err_parts.append(f'type hint "{type_hint}"')
 
-    return try_loaders, file_path, content
+    raise LoadingError(
+        file_path,
+        msg=f'unable to find suitable loader, hints used: {", ".join(err_parts)}',
+    )
 
 
 def load_settings(
     cls: Type[BaseSettingsModel],
-    file_or_path: Union[TextIO, str, Path],
+    any_content: Union[TextIO, str, Path],
     *,
     type_hint: str = None,
     load_env: bool = False,
@@ -66,49 +78,34 @@ def load_settings(
 ) -> BaseModel:
     """
     Load settings from file and/or environment variables and binds them to a
-    *pydantic* model. Supports *json*, *yaml* and *toml* formats. File format is
-    inferred from file extension or from given type hint.
+    *pydantic* model. Supports *json*, *yaml* and *toml* formats. File format choose
+    is complex a bit: firstly, if file path provided or content stream has
+    :code:`name` attribute and file name have common extension ("yaml", "json" etc),
+    appropriate loader will be used, otherwise `type_hint` will be used.
 
     :param cls: model class
-    :param file_or_path: configuration file name
+    :param any_content: configuration file name as `Path` or text content as string or
+    stream
     :param type_hint: type hint from which appropriate decoder may be chosen
     :param load_env: load environment variables
     :param _environ: semi-private parameter intended to easily mock environ from tests
 
-    :raises ConfigLoadError: in case if any error occurred while loading
+    :raises LoadingError: in case if any error occurred while loading
     configuration file
 
     :return: settings model instance
     """
-    # prepare list of loaders based on file such parameters
-    # as file extension and given type hint
-    try_loaders, file_path, content = _lookup_loaders(file_or_path, type_hint)
+    loader_desc, file_path, content = _resolve_arguments(any_content, type_hint)
 
-    # try loaders until valid result will be returned
-    file_values: Optional[FileValues] = None
-    errors_while_trying: List[Exception] = []
-    for attempt, loader_desc in enumerate(try_loaders, 1):
-        try:
-            file_values = loader_desc.values_loader(content)
-            break
-        except ParsingError as err:
-            errors_while_trying.append(
-                LoadingParseError(
-                    file_path,
-                    err.cause,
-                    f'parsing exception occurs in loader of "{loader_desc.name}" type',
-                    location=err.file_location,
-                    loader=loader_desc,
-                )
-            )
-            continue
-
-    assert file_values is not None or len(errors_while_trying) > 0
-    if len(errors_while_trying) and file_values is None:
-        raise LoadingError(
+    try:
+        file_values = loader_desc.values_loader(content)
+    except ParsingError as err:
+        raise LoadingParseError(
             file_path,
-            msg='some loaders being tried, but all failed',
-            errs=errors_while_trying,
+            err.cause,
+            f'parsing exception occurs in loader of "{loader_desc.name}" type',
+            location=err.file_location,
+            loader=loader_desc,
         )
 
     # construct object
@@ -119,7 +116,7 @@ def load_settings(
     if load_env:
         # TODO: ignore env vars restoration errors so far
         env_values, _ = cls.shape_restorer.restore(_environ or os_environ)
-        document_content = deep_merge_mappings(document_content, env_values)
+        document_content = deep_merge_mappings(env_values, document_content)
 
     try:
         result = cls(**document_content)

@@ -1,16 +1,5 @@
 from dataclasses import Field
-from typing import (
-    Dict,
-    Union,
-    List,
-    Any,
-    ClassVar,
-    Type,
-    Sequence,
-    Generic,
-    TypeVar,
-    Mapping,
-)
+from typing import Dict, Union, List, Any, ClassVar, Type, Sequence, TypeVar
 
 from pydantic import BaseModel
 from typing_extensions import Protocol
@@ -38,30 +27,14 @@ Location of a value inside a `JsonDict`, used to describe model input locations
 """
 
 
-Loc = TypeVar('Loc', contravariant=True)
+SourceLocation = TypeVar('SourceLocation', contravariant=True)
 
 
-class ModelLocationGetter(Protocol[Loc]):
+class SourceLocationProvider(Protocol[SourceLocation]):
     """
-    Generic protocol describes a mapping of values
+    Generic protocol for an object able to describe model field location inside
+    a source of `SourceLocation` kind.
     """
 
-    def get_location(self, val_loc: ModelLocation) -> Loc:
+    def get_location(self, val_loc: ModelLocation) -> SourceLocation:
         raise NotImplementedError
-
-
-class FlatMapValues(Dict[str, Json]):
-    __slots__ = 'restored_values', 'restore_errs'
-
-    def __init__(self, restored_values: Dict[ModelLocation, str], **values: Json):
-        super().__init__(**values)
-        self.restored_values = restored_values
-
-    def get_location(self, val_loc: ModelLocation) -> str:
-        """
-
-        :param val_loc:
-        :raises KeyError: in case if such value hasn't been restored
-        :return:
-        """
-        return self.restored_values[val_loc]
