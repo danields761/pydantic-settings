@@ -5,11 +5,8 @@ from attr import dataclass as attr_dataclass
 from pydantic import BaseModel, ValidationError, MissingError
 from pytest import fixture, mark, raises
 
-from pydantic_settings.base import (
-    _build_model_flat_map,
-    ModelShapeRestorer,
-    BaseSettingsModel,
-)
+from pydantic_settings.base import ModelShapeRestorer, BaseSettingsModel
+from pydantic_settings.model_shape_restorer import _build_model_flat_map
 from pydantic_settings.errors import ExtendedErrorWrapper
 
 
@@ -132,7 +129,7 @@ def test_complex_nested_models(model_cls):
     ],
 )
 def test_restore_model(model_cls, input_val, result):
-    assert ModelShapeRestorer(model_cls, 'TEST', True, json.loads).restore(
+    assert ModelShapeRestorer(model_cls, 'TEST', False, json.loads).restore(
         input_val
     ) == (result, [])
 
@@ -147,7 +144,8 @@ class SettingModel1(BaseSettingsModel):
 def test_invalid_env_var_assignment():
     with raises(ValidationError) as exc_info:
         SettingModel1.from_env(
-            {'APP_BAZ': 'SOMETHING DEFINITELY NOT A JSON OR TOML STRING'}
+            {'APP_BAZ': 'SOMETHING DEFINITELY NOT A JSON OR TOML STRING'},
+            ignore_restore_errs=False,
         )
 
     assert len(exc_info.value.raw_errors) == 2

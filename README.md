@@ -8,10 +8,10 @@ Library which extends [**pydantic**](https://github.com/samuelcolvin/pydantic) f
 implementation, e.g. `pydantic.BaseSettings`, but from my point it's missing some useful features:
 
 1. Overriding settings values by environment variables even for nested fields
-2. Providing detailed information about value location inside a loaded file or environment variable, which helps to point user his mistake
+2. Providing detailed information about value location inside a loaded file or environment variable, which helps to point user mistake
 3. Documenting model fields isn't feels comfortable, but it's really essential to write comprehensive documentation for application settings
 
-> **_NOTE:_** Despite the fact that project already implements most of his features, it's still considered to be on alpha stage
+> **_NOTE:_** Alpha quality
 
 ## Installation
 
@@ -25,7 +25,7 @@ pip install pydantic-settings
 
 ### Override values by env variables
 
-Allows to override values for nested fields if they are represented as *pydantic* model. Generally speaking, nested `attrs` and `dataclass` models also supported, but they are not supported by *pydantic*. 
+Allows to override values for nested fields if they are represented as *pydantic* model. Generally speaking, nested `attrs` and `dataclass` models also supported, but sadly they are not supported by *pydantic*.
 
 Here is example:
 
@@ -46,7 +46,7 @@ except ValidationError as e:
     assert e.raw_errors[0].env_loc == 'APP_nested_FOO'  # shows exact env variable name
 ```
 
-### Point exact error file location
+### Point exact error location inside file
 
 ```python
 from pydantic import BaseModel, IntegerError
@@ -128,4 +128,5 @@ pre-commit install
 That will install pre-commit hooks, which will check code with *flake8* and *black*.
 
 > *NOTE* project uses **black** as code formatter, but i'am personally really dislike their
-> *"double quoted strings everywhere"* style, that's why `black -S` should be used (anyway it's configured in *pyproject.toml* file)  
+> *"double quoted strings everywhere"* style, that's why `black -S` should be used
+> (anyway it's configured in *pyproject.toml* file)

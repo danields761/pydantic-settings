@@ -16,7 +16,7 @@ from pydantic_settings.errors import (
     with_errs_locations,
 )
 from pydantic_settings.loaders import get_loader, LoaderMeta, ParsingError, FileValues
-from pydantic_settings.types import Json, FlatMapValues
+from pydantic_settings.model_shape_restorer import FlatMapValues
 from pydantic_settings.utils import deep_merge_mappings
 
 
@@ -75,7 +75,7 @@ def load_settings(
     :param load_env: load environment variables
     :param _environ: semi-private parameter intended to easily mock environ from tests
 
-    :raises ConfigLoadError: in case if any error occurred while loading
+    :raises LoadingError: in case if any error occurred while loading
     configuration file
 
     :return: settings model instance

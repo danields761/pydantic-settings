@@ -10,9 +10,6 @@ from pydantic import BaseModel
 from pydantic_settings.types import AnyModelType
 
 
-_FIELD_DEFS_NODS = (ast.AnnAssign, ast.Assign)
-
-
 def extract_ast_fields_docs_from_classdef(tree: ast.ClassDef) -> Dict[str, str]:
     """
     Extract Sphinx-style class attributes documentation from it AST-tree
@@ -46,17 +43,14 @@ def extract_sphinx_class_attrib_docs(model: Type) -> Dict[str, str]:
 
     Doesn't performs lookup for base classes.
 
-    Skips fields which is defined with multiple assignment syntax like "foo, bar,
-    ... = 'some', 'values', ..." because it really unclear, by which attribute name
-    the docs should be labeled.
+    Skips fields which is defined with multiple assignment syntax like :code:`foo, bar,
+    ... = 'some', 'values', ...` because it really unclear, for which attribute the docs
+    should be assigned.
 
-    :param model: type object (instances allowed as well) of a class for whom
-    appropriate sources may be found using `inspect.getsource`. Use
-    `extract_ast_fields_docs_from_classdef` instead in case, when object sources
-    can't be extracted and you have some workaround to get them.
+    :param model: type object (instances allowed as well) of a some class definition
 
     :raise ValueError: in case if given object can't provide sources.
-    :raise TypeError: in case if object isn't class definition
+    :raise TypeError: in case if object isn't a class definition
 
     :return: mapping "field name" => "extracted docstring"
     """
@@ -92,8 +86,7 @@ extract_class_attrib_docs = extract_sphinx_class_attrib_docs
 
 def apply_attributes_docs(model: AnyModelType, *, override_existed: bool = True):
     """
-    Apply in-place model attributes documentation extracted using
-    `extract_class_attrib_docs`. Resulted docs may be found inside
+    Apply model attributes documentation in-place. Resulted docs may be found inside
     'field.schema.description' for *pydantic* model field, 'field.metadata['doc'] for
     *dataclass* field and 'attribute.metadata['doc'] for *attr* attribute. See
     `extract_class_attrib_docs` for more details how extraction is performed.
@@ -139,9 +132,9 @@ def with_attrs_docs(
     Decorator which applies `apply_attributes_docs`
     """
 
-    def decorator(model_cls_: AnyModelType):
-        apply_attributes_docs(model_cls_, override_existed=override_existed)
-        return model_cls_
+    def decorator(maybe_model_cls: AnyModelType):
+        apply_attributes_docs(maybe_model_cls, override_existed=override_existed)
+        return maybe_model_cls
 
     if model_cls is None:
         return decorator
