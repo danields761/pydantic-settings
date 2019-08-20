@@ -33,6 +33,7 @@ attrs = "^19.1"
 pytest = "^5.0.1"
 black = "^19.3b0"
 pytest-clarity = "^0.2.0-alpha.1"
+sphinx = "^2.2.0"
 
 [tool.black]
 # UEAH thats works
