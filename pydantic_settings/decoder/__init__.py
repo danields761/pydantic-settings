@@ -45,8 +45,7 @@ def get_decoder(decoder_type: str) -> DecoderMeta:
     Get decoder for given type-hint. Decoders imported in lazy-style, allowing
     you to mark *pyyaml* and *tomlkit* as optional dependencies.
 
-    :param decoder_type: any kind of decoder hint: file extension, mime-type or common
-    name
+    :param decoder_type: any kind of decoder hint: file extension, mime-type or common name
     :return: decoder metadata
     """
     # i'am not really sure about possibility to guess mime-type for something like json

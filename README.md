@@ -4,14 +4,14 @@
 [![Build Status](https://travis-ci.com/danields761/pydantic-settings.svg?branch=master)](https://travis-ci.com/danields761/pydantic-settings)
 [![PyPI version](https://badge.fury.io/py/pydantic-settings.svg)](https://badge.fury.io/py/pydantic-settings)
 
-Library which extends [**pydantic**](https://github.com/samuelcolvin/pydantic) functionality in scope of application settings. *Pydantic* already have settings
+Library which extends [__pydantic__](https://github.com/samuelcolvin/pydantic) functionality in scope of application settings. *Pydantic* already have settings
 implementation, e.g. `pydantic.BaseSettings`, but from my point it's missing some useful features:
 
 1. Overriding settings values by environment variables even for nested fields
 2. Providing detailed information about value location inside a loaded file or environment variable, which helps to point user mistake
 3. Documenting model fields isn't feels comfortable, but it's really essential to write comprehensive documentation for application settings
 
-> **_NOTE:_** Alpha quality
+> __NOTE:__ Alpha quality
 
 ## Installation
 
@@ -96,7 +96,7 @@ assert Foo.__fields__['baz'].schema.description is None  # :(
 
 ## Development setup
 
-Project requires [**poetry**](https://github.com/sdispater/poetry) for development setup.
+Project requires [__poetry__](https://github.com/sdispater/poetry) for development setup.
 
 * If you aren't have it already
 
@@ -118,7 +118,7 @@ poetry run pytest .
 
 * Great, all works! Expect one optional step:
 
-* Install [**pre-commit**](https://github.com/pre-commit/pre-commit) for pre-commit hooks
+* Install [__pre-commit__](https://github.com/pre-commit/pre-commit) for pre-commit hooks
 
 ```sh
 pip install pre-commit
@@ -127,6 +127,6 @@ pre-commit install
 
 That will install pre-commit hooks, which will check code with *flake8* and *black*.
 
-> *NOTE* project uses **black** as code formatter, but i'am personally really dislike their
+> *NOTE* project uses __black__ as code formatter, but i'am personally really dislike their
 > *"double quoted strings everywhere"* style, that's why `black -S` should be used
 > (anyway it's configured in *pyproject.toml* file)

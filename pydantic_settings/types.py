@@ -23,7 +23,7 @@ AnyModelType = Type[Union[BaseModel, DataclassProtocol, AttrsProtocol]]
 
 ModelLocation = Sequence[Union[str, int]]
 """
-Location of a value inside a `JsonDict`, used to describe model input locations
+Location of a value inside a :py:obj:`JsonDict`, used to describe model input locations
 """
 
 
@@ -33,7 +33,7 @@ SourceLocation = TypeVar('SourceLocation', contravariant=True)
 class SourceLocationProvider(Protocol[SourceLocation]):
     """
     Generic protocol for an object able to describe model field location inside
-    a source of `SourceLocation` kind.
+    a source corresponding to type of :py:obj:`SourceLocation`.
     """
 
     def get_location(self, val_loc: ModelLocation) -> SourceLocation:

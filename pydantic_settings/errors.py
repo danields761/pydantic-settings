@@ -18,7 +18,7 @@ class LoadingError(ValueError):
     """Source file path, or none if in-memory string used"""
 
     cause: Optional[Exception]
-    """Cause of error (used instead of __cause__ attribute)"""
+    """Cause of error (used instead of :py:attr:`__cause__` attribute)"""
 
     msg: Optional[str]
     """Optional error message"""
@@ -86,8 +86,8 @@ class LoadingParseError(LoadingError):
 
 class LoadingValidationError(LoadingError, ValidationError):
     """
-    Joins pydantic `ValidationError` and `LoadingError`, primarily to allow
-    catching specific for `load_settings` function errors at once
+    Joins :py:class:`pydantic.ValidationError` and :py:class:`LoadingError`, primarily
+    to allow catching specific for :py:func:`.load_settings` function errors at once
     """
 
     __slots__ = 'file_path', 'cause', 'msg', 'content'
@@ -170,24 +170,19 @@ class ExtendedErrorWrapper(ErrorWrapper):
     __slots__ = 'source_loc', 'content'
 
     source_loc: Union[str, FileLocation]
-    """Describes source location, corresponding to `loc`"""
-
-    content: str
-    """Text content"""
+    """
+    Describes source location, corresponding to :py:attr:`pydantic.ErrorWrapper.loc`
+    """
 
     def __init__(
-        self,
-        *args: Any,
-        source_loc: Union[str, FileLocation] = None,
-        content: str = None,
-        **kwargs: Any,
+        self, *args: Any, source_loc: Union[str, FileLocation] = None, **kwargs: Any
     ):
         super().__init__(*args, **kwargs)
         self.source_loc = source_loc
-        self.content = content
 
     @property
     def is_from_env(self) -> bool:
+        """Is :py:attr:`source_loc` denotes environment variable name"""
         return isinstance(self.source_loc, str)
 
     @classmethod

@@ -1,6 +1,3 @@
-"""
-Some utilities to help with *pydantic* or extends it's behaviour
-"""
 from io import StringIO
 from os import environ as os_environ
 from pathlib import Path
@@ -16,7 +13,7 @@ from pydantic_settings.errors import (
     LoadingParseError,
     with_errs_locations,
 )
-from pydantic_settings.model_shape_restorer import FlatMapValues
+from pydantic_settings.restorer import FlatMapValues
 from pydantic_settings.utils import deep_merge_mappings
 
 
@@ -90,8 +87,7 @@ def load_settings(
     appropriate decoder is used, otherwise exception is raised.
 
     :param cls: model class
-    :param any_content: configuration file name as `Path` or text content as string or
-    stream
+    :param any_content: configuration file name as `Path` or text content as string or stream
     :param type_hint: type hint from which appropriate decoder may be chosen
     :param load_env: load environment variables
     :param _environ: semi-private parameter intended to easily mock environ from tests

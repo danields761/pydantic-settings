@@ -33,6 +33,11 @@ attrs = "^19.1"
 pytest = "^5.0.1"
 black = "^19.3b0"
 pytest-clarity = "^0.2.0-alpha.1"
+sphinx = "^2.2.0"
+sphinxcontrib-golangdomain = "^0.2.0-alpha.0"
+sphinx-autoapi = "^1.1.0"
+recommonmark = "^0.6.0"
+m2r = "^0.2.1"
 
 [tool.black]
 # UEAH thats works

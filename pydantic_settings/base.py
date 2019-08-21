@@ -5,7 +5,7 @@ from pydantic import BaseModel, ValidationError
 
 from pydantic_settings.attrs_docs import apply_attributes_docs
 from pydantic_settings.errors import ExtendedErrorWrapper, with_errs_locations
-from pydantic_settings.model_shape_restorer import ModelShapeRestorer
+from pydantic_settings.restorer import ModelShapeRestorer
 from pydantic_settings.utils import deep_merge_mappings
 
 
@@ -14,22 +14,26 @@ T = TypeVar('T', bound='SettingsModel')
 
 class BaseSettingsModel(BaseModel):
     """
-    Thin wrapper which combines `pydantic.BaseModel` and `ModelShapeRestorer` for
-    mapping env variables onto this model. Model behaviour configured with `Config`
-    namespace traditionally for *pydantic*.
+    Thin wrapper which combines :py:class:`pydantic.BaseModel` and
+    :py:class:`.ModelShapeRestorer` for mapping env variables onto this model.
     """
 
     class Config:
+        """
+        Model behaviour configured with `Config` namespace traditionally for *pydantic*.
+        """
+
         env_prefix: str = 'APP'
         """
-        Expects that actual environ variables begin with given prefix, ex:
+        Expects that actual environ variables begins with given prefix, ex:
         :code:`'APP_FOO'` become :code:`model_instance['foo']`. Respects case
         sensitivity option.
         """
 
         env_case_sensitive: bool = False
         """
-        Whether `ModelShapeRestorer` will take environment variable case into account.
+        Whether :py:class:`.ModelShapeRestorer` 
+        will take environment variable case into account.
         """
 
         complex_inline_values_decoder = json.loads
@@ -37,13 +41,13 @@ class BaseSettingsModel(BaseModel):
         Used to decode bunch of values for some nested namespace. Assume some
         nested namespace with 'foo' location and shape like
         :code:`{"bar": 1, "baz": "val"}`, then you able to set whole value with env 
-        variable :code:`export APP_FOO={"bar": 2, "baz": "new_val"}`.
+        variable :command:`export APP_FOO='{"bar": 2, "baz": "new_val"}'`.
          """
 
         build_attr_docs: bool = False
         """
         Lookup and set model fields descriptions taken from attributes docs. See
-        `apply_attributes_docs` for further details.
+        :py:func:`.apply_attributes_docs` for further details.
         """
 
         override_exited_attrs_docs: bool = False

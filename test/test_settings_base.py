@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError, MissingError
 from pytest import fixture, mark, raises
 
 from pydantic_settings.base import ModelShapeRestorer, BaseSettingsModel
-from pydantic_settings.model_shape_restorer import _build_model_flat_map
+from pydantic_settings.restorer import _build_model_flat_map
 from pydantic_settings.errors import ExtendedErrorWrapper
 
 

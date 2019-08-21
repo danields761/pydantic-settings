@@ -7,6 +7,10 @@ from pydantic_settings.types import Json, ModelLocation, SourceLocationProvider
 
 @dataclass
 class FileLocation:
+    """
+    Describes range of symbols inside file
+    """
+
     line: int
     col: int
     end_line: int
@@ -72,8 +76,7 @@ class ParsingError(ValueError):
     a source.
 
     :var cause: error causer
-    :var file_location: error location inside file, in case if None, relates to whole
-    file
+    :var file_location: error location inside file, in case if None, relates to whole file
     """
 
     def __init__(self, cause: Exception, file_location: FileLocation = None):
