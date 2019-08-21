@@ -150,7 +150,7 @@ load = partial(json.load, cls=ASTDecoder)
 loads = partial(json.loads, cls=ASTDecoder)
 
 
-def load_document(content: Union[str, TextIO]) -> FileValues:
+def decode_document(content: Union[str, TextIO]) -> FileValues:
     try:
         if isinstance(content, str):
             tree = loads(content)

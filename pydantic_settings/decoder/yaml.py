@@ -63,7 +63,7 @@ class _LocationFinder:
         return curr_node
 
 
-def load_document(
+def decode_document(
     content: Union[str, TextIO], *, loader_cls=yaml.SafeLoader
 ) -> FileValues:
     if isinstance(content, str):

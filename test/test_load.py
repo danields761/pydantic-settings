@@ -99,18 +99,18 @@ def empty_tmp_file_creator(extension):
         (
             empty_tmp_file_creator('cfg'),
             None,
-            'unable to find suitable loader, hints used: file extension ".cfg"',
+            'unable to find suitable decoder, hints used: file extension ".cfg"',
         ),
-        ('', 'ini', 'unable to find suitable loader, hints used: type hint "ini"'),
+        ('', 'ini', 'unable to find suitable decoder, hints used: type hint "ini"'),
         (
             StringIO(''),
             'ini',
-            'unable to find suitable loader, hints used: type hint "ini"',
+            'unable to find suitable decoder, hints used: type hint "ini"',
         ),
         (
             empty_tmp_file_creator('cfg'),
             'DEFINITELY NOT A TYPE HINT',
-            'unable to find suitable loader, hints used: file extension ".cfg", type hint "DEFINITELY NOT A TYPE HINT"',
+            'unable to find suitable decoder, hints used: type hint "DEFINITELY NOT A TYPE HINT", file extension ".cfg"',
         ),
     ],
 )
@@ -130,6 +130,5 @@ def test_file_not_found():
         load_settings(Settings2, path)
 
     assert isinstance(err_info.value.cause, FileNotFoundError)
-    assert err_info.value.msg == 'file not found'
     assert err_info.value.content is None
     assert err_info.value.file_path == path

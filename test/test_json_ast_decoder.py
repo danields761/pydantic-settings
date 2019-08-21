@@ -1,10 +1,10 @@
 from pytest import mark
 
-import pydantic_settings.loaders.json
-from pydantic_settings.loaders import json
+import pydantic_settings.decoder.json
+from pydantic_settings.decoder import json
 
 
-_create = pydantic_settings.loaders.json.ASTItem.create
+_create = pydantic_settings.decoder.json.ASTItem.create
 
 
 JSON_LIST = """[

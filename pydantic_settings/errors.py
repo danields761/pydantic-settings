@@ -4,7 +4,7 @@ from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterab
 from pydantic import ValidationError
 from pydantic.error_wrappers import ErrorWrapper
 
-from pydantic_settings.loaders import FileLocation, LoaderMeta
+from pydantic_settings.decoder import FileLocation, DecoderMeta
 from pydantic_settings.types import SourceLocationProvider
 
 
@@ -40,24 +40,22 @@ class LoadingError(ValueError):
             content,
         )
 
-    def render_error(
-        self, *, print_file_snippets: bool = False, snippet_take_lines: int = 3
-    ) -> str:
+    def render_error(self) -> str:
         """
-        Render error as a human-readable text with errors descriptions and error
-        snippets
+        Render error as a human-readable text
 
-        **NOTE**: file snippet may take lines with secure credentials, as a result
-        your secrets may leak into server logs and observed by second-party. So
-        enabling `print_file_snippets` is a risky and not recommended for back-end
-        development.
-
-        :param print_file_snippets: print snippets of a error helping to locate it (
-        see *NOTE* section)
-        :param snippet_take_lines: how much lines up and down file snippet will take
         :return: rendered text string
         """
-        raise NotImplementedError
+        return (
+            f'error while loading settings from '
+            f'{self._repr_file_path()}: {str(self.cause) if self.cause else self.msg}'
+        )
+
+    def _repr_file_path(self) -> str:
+        if self.file_path is not None:
+            return f'configuration file at "{self.file_path}"'
+        else:
+            return 'in-memory configuration text'
 
 
 class LoadingParseError(LoadingError):
@@ -68,18 +66,19 @@ class LoadingParseError(LoadingError):
     def __init__(
         self,
         *args: Any,
-        loader: LoaderMeta = None,
+        decoder: DecoderMeta = None,
         location: FileLocation = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.location = location
-        self.loader = loader
+        self.decoder = decoder
 
-    def render_error(
-        self, *, print_file_snippets: bool = False, snippet_take_lines: int = 3
-    ) -> str:
-        raise NotImplementedError
+    def render_error(self) -> str:
+        return (
+            f'parsing error while loading settings from {self._repr_file_path()} '
+            f'using "{self.decoder.name} loader": {str(self.cause)}'
+        )
 
 
 class LoadingValidationError(LoadingError, ValidationError):
@@ -108,10 +107,53 @@ class LoadingValidationError(LoadingError, ValidationError):
             if isinstance(raw_err, ExtendedErrorWrapper)
         )
 
-    def render_error(
-        self, *, print_file_snippets: bool = False, snippet_take_lines: int = 3
-    ) -> str:
-        raise NotImplementedError
+    def render_error(self) -> str:
+        env_used = any(
+            raw_err.env_loc
+            for raw_err in self.raw_errors
+            if isinstance(raw_err, ExtendedErrorWrapper)
+        )
+        nl = '\n'
+        return (
+            f'{len(self.raw_errors)} validation errors while loading settings '
+            f'from {self._repr_file_path()}'
+            f"""{' and environment variables' if env_used else ''}:\n{
+                nl.join(
+                    _render_raw_error(raw_err)
+                    for raw_err in _flatten_errors_wrappers(self.raw_errors, loc=())
+                )
+            }"""
+        )
+
+
+def _render_raw_error(raw_err: ErrorWrapper) -> str:
+    return (
+        f'{_render_err_loc(raw_err)}\n'
+        f'  {raw_err.msg} ({_display_error_type_and_ctx(raw_err)})'
+    )
+
+
+def _render_err_loc(raw_err: ErrorWrapper) -> str:
+    model_loc = ' -> '.join(str(l) for l in raw_err.loc)
+    if isinstance(raw_err, ExtendedErrorWrapper):
+        if raw_err.env_loc is not None:
+            from_loc = f' from env "{raw_err.env_loc}"'
+        else:
+            from_loc = (
+                f' at {raw_err.text_loc.line} line {raw_err.text_loc.end_pos} column'
+            )
+    else:
+        from_loc = ''
+    return model_loc + from_loc
+
+
+def _display_error_type_and_ctx(error: ErrorWrapper) -> str:
+    t = 'type=' + error.type_
+    ctx = error.ctx
+    if ctx:
+        return t + ''.join(f'; {k}={v}' for k, v in ctx.items())
+    else:
+        return t
 
 
 class ExtendedErrorWrapper(ErrorWrapper):
@@ -157,7 +199,7 @@ class ExtendedErrorWrapper(ErrorWrapper):
         """
         ext_wrappper = object.__new__(cls)
         for attr in err_wrapper.__slots__:
-            setattr(ext_wrappper, attr, getattr(err_wrapper, attr))
+            setattr(ext_wrappper, attr, getattr(err_wrapper, attr, None))
         ext_wrappper.env_loc = env_loc
         ext_wrappper.text_loc = text_loc
         return ext_wrappper

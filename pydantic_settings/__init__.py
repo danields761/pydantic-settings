@@ -1,7 +1,7 @@
 from .base import BaseSettingsModel
 from .load import load_settings
 from .errors import LoadingError, LoadingParseError, LoadingValidationError
-from .loaders import FileLocation
+from .decoder import FileLocation
 
 
 __version__ = '0.1.0'
