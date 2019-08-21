@@ -92,7 +92,7 @@ class BaseSettingsModel(BaseModel):
         if len(env_apply_errs) > 0 and not ignore_restore_errs:
             env_errs_as_ew = [
                 ExtendedErrorWrapper(
-                    env_err.__cause__, loc=tuple(env_err.loc), env_loc=env_err.key
+                    env_err.__cause__, loc=tuple(env_err.loc), source_loc=env_err.key
                 )
                 for env_err in env_apply_errs
             ]

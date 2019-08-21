@@ -9,13 +9,13 @@ from typing import Type, TextIO, Optional, List, Union, Mapping, Tuple
 from pydantic import BaseModel, ValidationError
 
 from pydantic_settings.base import BaseSettingsModel
+from pydantic_settings.decoder import get_decoder, DecoderMeta, ParsingError
 from pydantic_settings.errors import (
     LoadingError,
     LoadingValidationError,
     LoadingParseError,
     with_errs_locations,
 )
-from pydantic_settings.decoder import get_decoder, DecoderMeta, ParsingError, FileValues
 from pydantic_settings.model_shape_restorer import FlatMapValues
 from pydantic_settings.utils import deep_merge_mappings
 
@@ -62,10 +62,15 @@ def _resolve_arguments(
     if file_extension is not None:
         err_parts.append(f'file extension "{file_extension}"')
 
-    raise LoadingError(
-        file_path,
-        msg=f'unable to find suitable decoder, hints used: {", ".join(err_parts)}',
-    )
+    if type_hint is None and file_extension is None:
+        msg = (
+            'unable to find suitable decoder because no hints provided: '
+            'expecting either file extension or "type_hint" argument'
+        )
+    else:
+        msg = f'unable to find suitable decoder, hints used: {", ".join(err_parts)}'
+
+    raise LoadingError(file_path, msg=msg)
 
 
 def load_settings(

@@ -155,7 +155,7 @@ def test_invalid_env_var_assignment():
 
     assert env_undecodable_value_err.loc == ('baz',)
     assert isinstance(env_undecodable_value_err, ExtendedErrorWrapper)
-    assert env_undecodable_value_err.env_loc == 'APP_BAZ'
+    assert env_undecodable_value_err.source_loc == 'APP_BAZ'
     assert isinstance(env_undecodable_value_err.exc, json.JSONDecodeError)
 
     assert not isinstance(missing_field_err, ExtendedErrorWrapper)

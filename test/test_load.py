@@ -108,6 +108,12 @@ def empty_tmp_file_creator(extension):
             'unable to find suitable decoder, hints used: type hint "ini"',
         ),
         (
+            StringIO(''),
+            None,
+            'unable to find suitable decoder because no hints provided: '
+            + 'expecting either file extension or "type_hint" argument',
+        ),
+        (
             empty_tmp_file_creator('cfg'),
             'DEFINITELY NOT A TYPE HINT',
             'unable to find suitable decoder, hints used: type hint "DEFINITELY NOT A TYPE HINT", file extension ".cfg"',

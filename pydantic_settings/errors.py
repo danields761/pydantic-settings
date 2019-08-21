@@ -51,6 +51,9 @@ class LoadingError(ValueError):
             f'{self._repr_file_path()}: {str(self.cause) if self.cause else self.msg}'
         )
 
+    def __str__(self) -> str:
+        return f'{type(self).__name__}: {self.render_error()}'
+
     def _repr_file_path(self) -> str:
         if self.file_path is not None:
             return f'configuration file at "{self.file_path}"'
@@ -102,14 +105,14 @@ class LoadingValidationError(LoadingError, ValidationError):
         self
     ) -> Iterable[Tuple[Union[str, FileLocation], Exception]]:
         return (
-            (raw_err.env_loc or raw_err.text_loc, raw_err.exc)
+            (raw_err.source_loc, raw_err.exc)
             for raw_err in self.raw_errors
             if isinstance(raw_err, ExtendedErrorWrapper)
         )
 
     def render_error(self) -> str:
         env_used = any(
-            raw_err.env_loc
+            raw_err.is_from_env
             for raw_err in self.raw_errors
             if isinstance(raw_err, ExtendedErrorWrapper)
         )
@@ -117,7 +120,8 @@ class LoadingValidationError(LoadingError, ValidationError):
         return (
             f'{len(self.raw_errors)} validation errors while loading settings '
             f'from {self._repr_file_path()}'
-            f"""{' and environment variables' if env_used else ''}:\n{
+            f"{' and environment variables' if env_used else ''}"
+            f""":\n{
                 nl.join(
                     _render_raw_error(raw_err)
                     for raw_err in _flatten_errors_wrappers(self.raw_errors, loc=())
@@ -136,11 +140,12 @@ def _render_raw_error(raw_err: ErrorWrapper) -> str:
 def _render_err_loc(raw_err: ErrorWrapper) -> str:
     model_loc = ' -> '.join(str(l) for l in raw_err.loc)
     if isinstance(raw_err, ExtendedErrorWrapper):
-        if raw_err.env_loc is not None:
-            from_loc = f' from env "{raw_err.env_loc}"'
+        if raw_err.is_from_env:
+            from_loc = f' from env "{raw_err.source_loc}"'
         else:
             from_loc = (
-                f' at {raw_err.text_loc.line} line {raw_err.text_loc.end_pos} column'
+                f' at {raw_err.source_loc.line} line '
+                f'{raw_err.source_loc.end_pos} column'
             )
     else:
         from_loc = ''
@@ -162,13 +167,10 @@ class ExtendedErrorWrapper(ErrorWrapper):
     bad filed value in configuration file or among environment variables
     """
 
-    __slots__ = 'env_loc', 'text_loc', 'content'
+    __slots__ = 'source_loc', 'content'
 
-    env_loc: Optional[str]
-    """Environment variable which provides bad value"""
-
-    text_loc: Optional[FileLocation]
-    """Text location of a bad value"""
+    source_loc: Union[str, FileLocation]
+    """Describes source location, corresponding to `loc`"""
 
     content: str
     """Text content"""
@@ -176,40 +178,34 @@ class ExtendedErrorWrapper(ErrorWrapper):
     def __init__(
         self,
         *args: Any,
-        env_loc: str = None,
-        text_loc: FileLocation = None,
+        source_loc: Union[str, FileLocation] = None,
         content: str = None,
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
-        self.env_loc = env_loc
-        self.text_loc = text_loc
+        self.source_loc = source_loc
         self.content = content
+
+    @property
+    def is_from_env(self) -> bool:
+        return isinstance(self.source_loc, str)
 
     @classmethod
     def from_error_wrapper(
-        cls,
-        err_wrapper: ErrorWrapper,
-        *,
-        env_loc: str = None,
-        text_loc: FileLocation = None,
+        cls, err_wrapper: ErrorWrapper, *, source_loc: Union[str, FileLocation] = None
     ) -> 'ExtendedErrorWrapper':
         """
         Alternative constructor trying to make copying faster
         """
         ext_wrappper = object.__new__(cls)
         for attr in err_wrapper.__slots__:
-            setattr(ext_wrappper, attr, getattr(err_wrapper, attr, None))
-        ext_wrappper.env_loc = env_loc
-        ext_wrappper.text_loc = text_loc
+            setattr(ext_wrappper, attr, getattr(err_wrapper, attr))
+        ext_wrappper.source_loc = source_loc
         return ext_wrappper
 
     def dict(self, *, loc_prefix: Optional[Tuple[str, ...]] = None) -> Dict[str, Any]:
         d = super().dict(loc_prefix=loc_prefix)
-        if self.env_loc is not None:
-            d['env_loc'] = self.env_loc
-        if self.text_loc is not None:
-            d['text_loc'] = self.text_loc
+        d.update({'source_loc': self.source_loc, 'is_from_env': self.is_from_env})
         return d
 
 
@@ -243,14 +239,12 @@ def with_errs_locations(
     for raw_err in _flatten_errors_wrappers(validation_err.raw_errors):
         try:
             location = values_source.get_location(raw_err.loc)
-            raw_err = ExtendedErrorWrapper.from_error_wrapper(
-                raw_err,
-                **(
-                    {'text_loc': location}
-                    if isinstance(location, FileLocation)
-                    else {'env_loc': location}
-                ),
-            )
+            if isinstance(raw_err, ExtendedErrorWrapper):
+                raw_err.source_loc = location
+            else:
+                raw_err = ExtendedErrorWrapper.from_error_wrapper(
+                    raw_err, source_loc=location
+                )
         except KeyError:
             pass
 
