@@ -15,27 +15,16 @@
 # sys.path.insert(0, os.path.abspath('.'))
 from pathlib import Path
 from packaging.version import Version
+import toml
 
 # -- Project information -----------------------------------------------------
 
-raw_version = None
-raw_authors = None
-with open(Path(__file__).parents[1] / 'pyproject.toml') as f:
-    for line in f:
-        if line.startswith('version'):
-            _, _, raw_version = line.partition(' = ')
-            raw_version = eval(raw_version)
-        if line.startswith('authors'):
-            _, _, raw_authors = line.partition(' = ')
-            raw_authors = eval(raw_authors)
+proj_meta = toml.load(Path(__file__).parents[1] / 'pyproject.toml')['tool']['poetry']
 
-        if raw_authors is not None and raw_version is not None:
-            break
-
-author = ', '.join(raw_authors) if isinstance(raw_authors, list) else ''
+author = ', '.join(proj_meta['authors'])
 project = 'Pydantic Settings'
 copyright = f'2019, {author}'
-release = raw_version
+release = proj_meta['version']
 version = Version(release).base_version if release else ''
 
 
@@ -44,7 +33,7 @@ version = Version(release).base_version if release else ''
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['autoapi.extension', 'm2r']
+extensions = ['autoapi.extension']
 source_suffix = ['.rst', '.md']
 
 
@@ -58,8 +47,6 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # Configure AutoAPI
 autoapi_dirs = ['../pydantic_settings']
-# autoapi_keep_files = True
-# autoapi_generate_api_docs = False
 autoapi_add_toctree_entry = False
 autoapi_options = ['members', 'undoc-members']
 

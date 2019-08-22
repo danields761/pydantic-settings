@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing_extensions import Protocol
 
 
-Json = Union[None, float, int, str, Dict[str, Any], List[Any]]
+Json = Union[float, int, str, Dict[str, Any], List[Any]]
 JsonDict = Dict[str, Json]
 JsonList = List[Json]
 

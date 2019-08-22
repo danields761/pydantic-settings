@@ -23,22 +23,10 @@ class LoadingError(ValueError):
     msg: Optional[str]
     """Optional error message"""
 
-    content: Optional[str]
-    """Settings content"""
-
     def __init__(
-        self,
-        file_path: Optional[Path],
-        cause: Exception = None,
-        msg: str = None,
-        content: str = None,
+        self, file_path: Optional[Path], cause: Exception = None, msg: str = None
     ):
-        self.args = self.file_path, self.cause, self.msg, self.content = (
-            file_path,
-            cause,
-            msg,
-            content,
-        )
+        self.args = self.file_path, self.cause, self.msg = (file_path, cause, msg)
 
     def render_error(self) -> str:
         """
@@ -90,16 +78,11 @@ class LoadingValidationError(LoadingError, ValidationError):
     to allow catching specific for :py:func:`.load_settings` function errors at once
     """
 
-    __slots__ = 'file_path', 'cause', 'msg', 'content'
+    __slots__ = 'file_path', 'cause', 'msg'
 
-    def __init__(
-        self,
-        raw_errors: Sequence[ErrorWrapper],
-        file_path: Optional[Path],
-        content: str = None,
-    ):
+    def __init__(self, raw_errors: Sequence[ErrorWrapper], file_path: Optional[Path]):
         ValidationError.__init__(self, raw_errors)
-        super().__init__(file_path, None, content=content)
+        super().__init__(file_path, None)
 
     def per_location_errors(
         self
@@ -167,7 +150,7 @@ class ExtendedErrorWrapper(ErrorWrapper):
     bad filed value in configuration file or among environment variables
     """
 
-    __slots__ = 'source_loc', 'content'
+    __slots__ = ('source_loc',)
 
     source_loc: Union[str, FileLocation]
     """

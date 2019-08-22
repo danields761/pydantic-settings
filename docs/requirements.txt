@@ -1,4 +1,3 @@
 sphinx==2.2.0
 toml
 sphinx-autoapi
-m2r

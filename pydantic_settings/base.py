@@ -44,9 +44,9 @@ class BaseSettingsModel(BaseModel):
         variable :command:`export APP_FOO='{"bar": 2, "baz": "new_val"}'`.
          """
 
-        build_attr_docs: bool = False
+        build_attr_docs: bool = True
         """
-        Lookup and set model fields descriptions taken from attributes docs. See
+        Lookup and set model fields descriptions taken from attributes docstrings. Look
         :py:func:`.apply_attributes_docs` for further details.
         """
 

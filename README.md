@@ -3,6 +3,7 @@
 
 [![Build Status](https://travis-ci.com/danields761/pydantic-settings.svg?branch=master)](https://travis-ci.com/danields761/pydantic-settings)
 [![PyPI version](https://badge.fury.io/py/pydantic-settings.svg)](https://badge.fury.io/py/pydantic-settings)
+[![Documentation Status](https://readthedocs.org/projects/pydantic-settings/badge/?version=latest)](https://pydantic-settings.readthedocs.io/en/latest/?badge=latest)
 
 Library which extends [__pydantic__](https://github.com/samuelcolvin/pydantic) functionality in scope of application settings. *Pydantic* already have settings
 implementation, e.g. `pydantic.BaseSettings`, but from my point it's missing some useful features:
@@ -25,7 +26,7 @@ pip install pydantic-settings
 
 ### Override values by env variables
 
-Allows to override values for nested fields if they are represented as *pydantic* model. Generally speaking, nested `attrs` and `dataclass` models also supported, but sadly they are not supported by *pydantic*.
+Allows to override values for nested fields if they are represented as *pydantic* model.
 
 Here is example:
 
@@ -93,6 +94,11 @@ class Foo(BaseSettingsModel):
 assert Foo.__fields__['bar'].schema.description == 'here is docs'
 assert Foo.__fields__['baz'].schema.description is None  # :(
 ```
+
+### Online docs
+
+Read more detailed documentation on the project
+[Read The Docs](https://pydantic-settings.readthedocs.io/en/latest/) page.
 
 ## Development setup
 

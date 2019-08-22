@@ -134,8 +134,9 @@ class ModelShapeRestorer(object):
     that rule:
 
     .. code-block:: python
-        def get_flat_map_key(prefix: str, nested_location: Sequence[Union[str, int]]) -> str:
-            return prefix + '_' + '_'.join(str(part) for part in nested_location)
+
+        def get_flat_map_key(prefix, loc):
+            return prefix + '_' + '_'.join(str(part) for part in loc)
 
     Where `prefix` - some arbitrary prefix, mostly aimed to separate different
     namespaces, `loc` - a sequence of keys and indexes, by which desired value may be
@@ -158,6 +159,14 @@ class ModelShapeRestorer(object):
             model, self._prefix, self._case_reducer
         )
         self._dead_end_resolver = dead_end_value_resolver
+
+    @property
+    def prefix(self) -> str:
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self, val: str):
+        self._prefix = val
 
     def restore(
         self, flat_map: Mapping[str, str]
