@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-settings"
-version = "0.1.0a1"
+version = "0.1.1b"
 description = "Hipster-orgazmic tool to mange application settings"
 readme = "README.md"
 authors = ["Daniel Daniels <danields761@gmail.com>"]
