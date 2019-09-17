@@ -4,7 +4,8 @@ from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterab
 from pydantic import ValidationError
 from pydantic.error_wrappers import ErrorWrapper
 
-from pydantic_settings.decoder import FileLocation, DecoderMeta
+from pydantic_settings.decoder import TextLocation, DecoderMeta
+from pydantic_settings.restorer import FlatMapLocation
 from pydantic_settings.types import SourceLocationProvider
 
 
@@ -58,7 +59,7 @@ class LoadingParseError(LoadingError):
         self,
         *args: Any,
         decoder: DecoderMeta = None,
-        location: FileLocation = None,
+        location: TextLocation = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -86,7 +87,7 @@ class LoadingValidationError(LoadingError, ValidationError):
 
     def per_location_errors(
         self
-    ) -> Iterable[Tuple[Union[str, FileLocation], Exception]]:
+    ) -> Iterable[Tuple[Union[FlatMapLocation, TextLocation], Exception]]:
         return (
             (raw_err.source_loc, raw_err.exc)
             for raw_err in self.raw_errors
@@ -104,7 +105,8 @@ class LoadingValidationError(LoadingError, ValidationError):
             f'{len(self.raw_errors)} validation errors while loading settings '
             f'from {self._repr_file_path()}'
             f"{' and environment variables' if env_used else ''}"
-            f""":\n{
+            ':\n'
+            f"""{
                 nl.join(
                     _render_raw_error(raw_err)
                     for raw_err in _flatten_errors_wrappers(self.raw_errors, loc=())
@@ -124,11 +126,14 @@ def _render_err_loc(raw_err: ErrorWrapper) -> str:
     model_loc = ' -> '.join(str(l) for l in raw_err.loc)
     if isinstance(raw_err, ExtendedErrorWrapper):
         if raw_err.is_from_env:
-            from_loc = f' from env "{raw_err.source_loc}"'
+            env_name, text_loc = raw_err.source_loc
+            from_loc = f' from env "{env_name}"'
+            if text_loc is not None:
+                from_loc += f' [{text_loc.pos}:{text_loc.end_pos}]'
         else:
             from_loc = (
-                f' at {raw_err.source_loc.line} line '
-                f'{raw_err.source_loc.end_pos} column'
+                f' from file at {raw_err.source_loc.line} line '
+                f'{raw_err.source_loc.col} column'
             )
     else:
         from_loc = ''
@@ -152,13 +157,16 @@ class ExtendedErrorWrapper(ErrorWrapper):
 
     __slots__ = ('source_loc',)
 
-    source_loc: Union[str, FileLocation]
+    source_loc: Union[str, TextLocation]
     """
     Describes source location, corresponding to :py:attr:`pydantic.ErrorWrapper.loc`
     """
 
     def __init__(
-        self, *args: Any, source_loc: Union[str, FileLocation] = None, **kwargs: Any
+        self,
+        *args: Any,
+        source_loc: Union[FlatMapLocation, TextLocation] = None,
+        **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
         self.source_loc = source_loc
@@ -166,11 +174,14 @@ class ExtendedErrorWrapper(ErrorWrapper):
     @property
     def is_from_env(self) -> bool:
         """Is :py:attr:`source_loc` denotes environment variable name"""
-        return isinstance(self.source_loc, str)
+        return not isinstance(self.source_loc, TextLocation)
 
     @classmethod
     def from_error_wrapper(
-        cls, err_wrapper: ErrorWrapper, *, source_loc: Union[str, FileLocation] = None
+        cls,
+        err_wrapper: ErrorWrapper,
+        *,
+        source_loc: Union[FlatMapLocation, TextLocation] = None,
     ) -> 'ExtendedErrorWrapper':
         """
         Alternative constructor trying to make copying faster
@@ -211,7 +222,7 @@ def _flatten_errors_wrappers(
 
 def with_errs_locations(
     validation_err: ValidationError,
-    values_source: SourceLocationProvider[Union[str, FileLocation]],
+    values_source: SourceLocationProvider[Union[FlatMapLocation, TextLocation]],
 ) -> ValidationError:
     err_wrappers: List[ErrorWrapper] = []
     for raw_err in _flatten_errors_wrappers(validation_err.raw_errors):

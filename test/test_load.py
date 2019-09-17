@@ -10,7 +10,7 @@ from pydantic_settings import (
     BaseSettingsModel,
     LoadingError,
     load_settings,
-    FileLocation,
+    TextLocation,
     LoadingValidationError,
 )
 
@@ -35,27 +35,37 @@ class Settings2(BaseSettingsModel):
 @mark.parametrize(
     'model_cls, content, environ, locations',
     [
-        (Settings, '{"bar": 1234}', {'T_FOO': 'AKA INT'}, [('T_FOO', IntegerError)]),
-        (Settings, '{"bar": 1234}', {'T_foo': 'AKA INT'}, [('T_foo', IntegerError)]),
+        (
+            Settings,
+            '{"bar": 1234}',
+            {'T_FOO': 'AKA INT'},
+            [(('T_FOO', None), IntegerError)],
+        ),
+        (
+            Settings,
+            '{"bar": 1234}',
+            {'T_foo': 'AKA INT'},
+            [(('T_foo', None), IntegerError)],
+        ),
         (
             Settings,
             '{"bar": "AKA FLOAT"}',
             {'T_foo': 101},
-            [(FileLocation(1, 9, 1, 20, 9, 19), FloatError)],
+            [(TextLocation(1, 9, 1, 20, 9, 19), FloatError)],
         ),
         (
             Settings2,
             '{}',
             {'A_SETTINGS_FOO': 'INVALID INT', 'A_SETTINGS_BAR': 1243},
-            [('A_SETTINGS_FOO', IntegerError)],
+            [(('A_SETTINGS_FOO', None), IntegerError)],
         ),
         (
             Settings2,
             '{"settings_list": [], "settings": {"foo": 100, "bar": "INVALID FLOAT"}, "foo": []}',
             {},
             [
-                (FileLocation(1, 55, 1, 70, 55, 69), FloatError),
-                (FileLocation(1, 80, 1, 82, 80, 81), StrError),
+                (TextLocation(1, 55, 1, 70, 55, 69), FloatError),
+                (TextLocation(1, 80, 1, 82, 80, 81), StrError),
             ],
         ),
         (
@@ -63,8 +73,8 @@ class Settings2(BaseSettingsModel):
             '{"settings_list": [], "settings": {"foo": 100}, "foo": []}',
             {'A_SETTINGS_BAR': 'INVALID FLOAT'},
             [
-                ('A_SETTINGS_BAR', FloatError),
-                (FileLocation(1, 56, 1, 58, 56, 57), StrError),
+                (('A_SETTINGS_BAR', None), FloatError),
+                (TextLocation(1, 56, 1, 58, 56, 57), StrError),
             ],
         ),
     ],

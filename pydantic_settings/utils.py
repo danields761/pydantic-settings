@@ -1,4 +1,4 @@
-from typing import Mapping, Dict
+from typing import Mapping, Dict, Type, Tuple, List, Union, TypeVar
 
 from pydantic_settings.types import Json
 
@@ -28,3 +28,17 @@ def deep_merge_mappings(
         dst[key] = val
 
     return dst
+
+
+def get_generic_info(t: Type) -> Tuple[Type, Tuple[Type, ...]]:
+    try:
+        return t.__origin__, t.__args__
+    except AttributeError:
+        raise TypeError(f'{t} is not a generic class')
+
+
+def get_union_subtypes(t: Type) -> Tuple[Type, ...]:
+    origin, args = get_generic_info(t)
+    if origin is not Union:
+        raise TypeError(f'{t} is not typing.Union')
+    return args

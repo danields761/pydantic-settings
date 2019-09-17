@@ -6,9 +6,9 @@ from pydantic_settings.types import Json, ModelLocation, SourceLocationProvider
 
 
 @dataclass
-class FileLocation:
+class TextLocation:
     """
-    Describes range of symbols inside file
+    Describes symbol occurrence inside inside a text
     """
 
     line: int
@@ -41,16 +41,16 @@ class ListExpectError(LocationLookupError):
     pass
 
 
-class FileValues(Dict[str, Json]):
+class TextValues(Dict[str, Json]):
     __slots__ = ('location_finder',)
 
-    def __init__(self, finder: SourceLocationProvider[FileLocation], **values: Json):
+    def __init__(self, finder: SourceLocationProvider[TextLocation], **values: Json):
         super().__init__(**values)
         self.location_finder = finder
 
-    def get_location(self, val_loc: ModelLocation) -> FileLocation:
+    def get_location(self, val_loc: ModelLocation) -> TextLocation:
         """
-        Maps model location to a file location.
+        Maps model location to text location.
 
         As example, files defines something equal to :code:`{'foo': {'bar': [1, 2]}}`,
         and we assuming that first value in the list is't correct and doesn't
@@ -59,7 +59,7 @@ class FileValues(Dict[str, Json]):
         .. code-block
             `file_values.get_location(['foo', 'bar', 0])`
 
-        and retrieve point, where value begins and ends.
+        which returns point, where value begins and ends.
 
         :param val_loc: values location described as sequence of keys and reducing it
         over root container with :code:`__getitem__` callable we will access final value
@@ -72,13 +72,13 @@ class FileValues(Dict[str, Json]):
 
 class ParsingError(ValueError):
     """
-    General wrapper for file parsing errors which also provides error location inside
+    General wrapper for text parsing errors which also provides error location inside
     a source.
 
     :var cause: error causer
-    :var file_location: error location inside file, in case if None, relates to whole file
+    :var text_location: error location inside text, in case if None, relates to whole file
     """
 
-    def __init__(self, cause: Exception, file_location: FileLocation = None):
+    def __init__(self, cause: Exception, text_location: TextLocation = None):
         self.cause = cause
-        self.file_location: Optional[FileLocation] = file_location
+        self.text_location: Optional[TextLocation] = text_location

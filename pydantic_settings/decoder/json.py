@@ -9,11 +9,11 @@ from attr import dataclass
 
 from pydantic_settings.types import Json, ModelLocation
 from .common import (
-    FileLocation,
+    TextLocation,
     LocationLookupError,
     MappingExpectError,
     ListExpectError,
-    FileValues,
+    TextValues,
     ParsingError,
 )
 
@@ -36,7 +36,7 @@ def _create_object_hook(original_value):
 
         return (
             ASTItem(
-                location=FileLocation(
+                location=TextLocation(
                     line=s.count('\n', None, end) + 1,
                     col=col,
                     end_line=s.count('\n', None, new_end) + 1,
@@ -54,7 +54,7 @@ def _create_object_hook(original_value):
 
 @dataclass
 class ASTItem:
-    location: FileLocation
+    location: TextLocation
     value: 'AstJsonLike'
 
     @classmethod
@@ -69,7 +69,7 @@ class ASTItem:
         end_pos: int = None,
     ) -> 'ASTItem':
         return ASTItem(
-            FileLocation(line, col, end_line, end_col, pos or 0, end_pos or 0), val
+            TextLocation(line, col, end_line, end_col, pos or 0, end_pos or 0), val
         )
 
     def get_json_value(self) -> Json:
@@ -103,7 +103,7 @@ def _create_scanner_wrapper(
                 f'unexpected value has been returned from scanner: "{val}" of type {type(val)}'
             )
 
-        return ASTItem(FileLocation(line, col, line, end_col, idx, end), val), end
+        return ASTItem(TextLocation(line, col, line, end_col, idx, end), val), end
 
     return wrapper
 
@@ -150,7 +150,7 @@ load = partial(json.load, cls=ASTDecoder)
 loads = partial(json.loads, cls=ASTDecoder)
 
 
-def decode_document(content: Union[str, TextIO]) -> FileValues:
+def decode_document(content: Union[str, TextIO]) -> TextValues:
     try:
         if isinstance(content, str):
             tree = loads(content)
@@ -158,28 +158,28 @@ def decode_document(content: Union[str, TextIO]) -> FileValues:
             tree = load(content)
     except json.JSONDecodeError as err:
         raise ParsingError(
-            err, FileLocation(err.lineno, err.colno, -1, -1, err.pos, -1)
+            err, TextLocation(err.lineno, err.colno, -1, -1, err.pos, -1)
         )
 
     if not isinstance(tree.value, dict):
         raise ParsingError(ValueError('document root item must be a mapping'), None)
 
-    return FileValues(_LocationFinder(tree), **tree.get_json_value())
+    return TextValues(_LocationFinder(tree), **tree.get_json_value())
 
 
 class _LocationFinder:
     def __init__(self, root_item: ASTItem):
         self.root_item = root_item
 
-    def get_location(self, key: ModelLocation) -> FileLocation:
+    def get_location(self, key: ModelLocation) -> TextLocation:
         try:
             return self._get_location(key)
         except LocationLookupError as err:
             # in case of this error __causer__ field will be populated
-            # with more specific error, so it might help during debugging
+            # with more specific error, so it might be helpful during debugging
             raise KeyError(key) from err
 
-    def _get_location(self, key: ModelLocation) -> FileLocation:
+    def _get_location(self, key: ModelLocation) -> TextLocation:
         curr_item = self.root_item
         for i, key_part in enumerate(key):
             if isinstance(key_part, int) and not isinstance(curr_item.value, list):

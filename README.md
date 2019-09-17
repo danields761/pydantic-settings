@@ -44,14 +44,14 @@ class Settings(BaseSettingsModel):
 try:
     Settings.from_env({'APP_nested_FOO': 'NOT AN INT'})
 except ValidationError as e:
-    assert e.raw_errors[0].env_loc == 'APP_nested_FOO'  # shows exact env variable name
+    assert e.raw_errors[0].env_loc == ('APP_nested_FOO', None)  # shows exact env variable name
 ```
 
 ### Point exact error location inside file
 
 ```python
 from pydantic import BaseModel, IntegerError
-from pydantic_settings import BaseSettingsModel, LoadingValidationError, load_settings, FileLocation
+from pydantic_settings import BaseSettingsModel, LoadingValidationError, load_settings, TextLocation
 
 class Nested(BaseModel):
     foo: int
@@ -68,7 +68,7 @@ try:
     load_settings(Settings, conf_text, type_hint='yaml')
 except LoadingValidationError as e:
     assert e.raw_errors[0].loc == ('nested', 'foo')
-    assert e.raw_errors[0].text_loc == FileLocation(line=3, col=10, end_line=3, end_col=22)
+    assert e.raw_errors[0].text_loc == TextLocation(line=3, col=10, end_line=3, end_col=22)
     assert isinstance(e.raw_errors[0].exc, IntegerError)
 
 ```

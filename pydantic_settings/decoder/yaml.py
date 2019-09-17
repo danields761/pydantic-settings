@@ -5,11 +5,11 @@ import yaml
 
 from pydantic_settings.types import ModelLocation
 from .common import (
-    FileLocation,
+    TextLocation,
     LocationLookupError,
     MappingExpectError,
     ListExpectError,
-    FileValues,
+    TextValues,
     ParsingError,
 )
 
@@ -18,13 +18,13 @@ class _LocationFinder:
     def __init__(self, root_node: yaml.Node):
         self._node = root_node
 
-    def get_location(self, key: ModelLocation) -> FileLocation:
+    def get_location(self, key: ModelLocation) -> TextLocation:
         try:
             node = self._lookup_node_by_loc(key)
         except LocationLookupError as err:
             raise KeyError(key) from err
 
-        return FileLocation(
+        return TextLocation(
             node.start_mark.line + 1,
             node.start_mark.column + 1,
             node.end_mark.line + 1,
@@ -65,7 +65,7 @@ class _LocationFinder:
 
 def decode_document(
     content: Union[str, TextIO], *, loader_cls=yaml.SafeLoader
-) -> FileValues:
+) -> TextValues:
     if isinstance(content, str):
         stream = io.StringIO(content)
     else:
@@ -80,7 +80,7 @@ def decode_document(
         if not isinstance(err, yaml.MarkedYAMLError):
             loc = None
         else:
-            loc = FileLocation(
+            loc = TextLocation(
                 err.problem_mark.line + 1,
                 err.problem_mark.column + 1,
                 -1,
@@ -96,4 +96,4 @@ def decode_document(
     if not isinstance(values, dict):
         raise ParsingError(ValueError('document root item must be a mapping'), None)
 
-    return FileValues(_LocationFinder(root_node), **values)
+    return TextValues(_LocationFinder(root_node), **values)

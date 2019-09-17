@@ -1,9 +1,9 @@
-import json
 from typing import Any, Type, cast, Mapping, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
 from pydantic_settings.attrs_docs import apply_attributes_docs
+from pydantic_settings.decoder import json
 from pydantic_settings.errors import ExtendedErrorWrapper, with_errs_locations
 from pydantic_settings.restorer import ModelShapeRestorer
 from pydantic_settings.utils import deep_merge_mappings
@@ -36,7 +36,7 @@ class BaseSettingsModel(BaseModel):
         will take environment variable case into account.
         """
 
-        complex_inline_values_decoder = json.loads
+        complex_inline_values_decoder = json.decode_document
         """
         Used to decode bunch of values for some nested namespace. Assume some
         nested namespace with 'foo' location and shape like
@@ -96,7 +96,9 @@ class BaseSettingsModel(BaseModel):
         if len(env_apply_errs) > 0 and not ignore_restore_errs:
             env_errs_as_ew = [
                 ExtendedErrorWrapper(
-                    env_err.__cause__, loc=tuple(env_err.loc), source_loc=env_err.key
+                    env_err.__cause__ or env_err,
+                    loc=tuple(env_err.loc),
+                    source_loc=(env_err.key, None),
                 )
                 for env_err in env_apply_errs
             ]

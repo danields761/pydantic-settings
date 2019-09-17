@@ -7,12 +7,12 @@ from typing import Callable, Union, TextIO
 from attr import dataclass
 
 from .common import (
-    FileLocation,
+    TextLocation,
     LocationLookupError,
     ListExpectError,
     MappingExpectError,
     ParsingError,
-    FileValues,
+    TextValues,
 )
 
 
@@ -37,7 +37,7 @@ class DecoderMeta:
     """Decoder matadata"""
 
     name: str
-    values_loader: Callable[[Union[str, TextIO]], FileValues]
+    values_loader: Callable[[Union[str, TextIO]], TextValues]
 
 
 def get_decoder(decoder_type: str) -> DecoderMeta:

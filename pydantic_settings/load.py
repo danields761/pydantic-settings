@@ -7,7 +7,7 @@ from typing import Type, TextIO, Optional, List, Union, Mapping, Tuple
 from pydantic import BaseModel, ValidationError
 
 from pydantic_settings.base import BaseSettingsModel
-from pydantic_settings.decoder import get_decoder, DecoderMeta, ParsingError, FileValues
+from pydantic_settings.decoder import get_decoder, DecoderMeta, ParsingError, TextValues
 from pydantic_settings.errors import (
     LoadingError,
     LoadingValidationError,
@@ -123,13 +123,13 @@ def load_settings(
         decoder_desc, file_path, content = _resolve_arguments(any_content, type_hint)
 
     document_content: Optional[JsonDict] = None
-    file_values: Optional[FileValues] = None
+    file_values: Optional[TextValues] = None
     if content is not None:
         try:
             document_content = file_values = decoder_desc.values_loader(content)
         except ParsingError as err:
             raise LoadingParseError(
-                file_path, err.cause, location=err.file_location, decoder=decoder_desc
+                file_path, err.cause, location=err.text_location, decoder=decoder_desc
             )
 
     # prepare environment values

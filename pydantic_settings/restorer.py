@@ -1,4 +1,7 @@
+import bisect
+from collections import defaultdict
 from dataclasses import is_dataclass
+from functools import reduce
 from typing import (
     Any,
     Callable,
@@ -12,16 +15,24 @@ from typing import (
     Iterator,
     Union,
     Sequence,
+    NamedTuple,
 )
 from attr import has as is_attr_class
 from pydantic import BaseModel
 
+from pydantic_settings.decoder import TextValues, ParsingError, TextLocation
 from pydantic_settings.types import JsonDict, AnyModelType, Json, ModelLocation
+from pydantic_settings.utils import get_union_subtypes
 
 
 _RecStrDictValue = Union['_RecStrDict', str]
 _RecStrDict = Dict[str, _RecStrDictValue]
-_NestedMappingPath = Tuple[Sequence[str], bool, bool]
+
+
+class _FieldLocDescription(NamedTuple):
+    path: Tuple[str, ...]
+    is_complex: bool
+    is_determined: bool
 
 
 def _noop(val: Any) -> Any:
@@ -40,29 +51,45 @@ def _is_determined_complex_field(field_type: Any) -> bool:
 def _estimate_field_complexity(field_type: Any) -> Tuple[bool, bool]:
     if _is_determined_complex_field(field_type):
         return True, True
-    if not hasattr(field_type, '__origin__') or field_type.__origin__ is not Union:
-        return False, False
 
-    return (
-        True,
-        all(
-            not _is_determined_complex_field(subtype) for subtype in field_type.__args__
-        ),
-    )
+    try:
+        union_subtypes = get_union_subtypes(field_type)
+    except TypeError:
+        pass
+    else:
+        return reduce(
+            lambda prev, item: (prev[0] or item, prev[1] and item),
+            (_is_determined_complex_field(subtype) for subtype in union_subtypes),
+            (False, True),
+        )
+
+    return False, False
 
 
-def _list_fields(model: AnyModelType) -> Iterator[Tuple[str, Type]]:
-    if issubclass(model, BaseModel):
-        for field in model.__fields__.values():
+def _list_fields(type_: Type) -> Iterator[Tuple[str, Type]]:
+    try:
+        union_subtypes = get_union_subtypes(type_)
+    except TypeError:
+        pass
+    else:
+        for subtype in union_subtypes:
+            try:
+                yield from _list_fields(subtype)
+            except TypeError:
+                pass
+        return
+
+    if isinstance(type_, type) and issubclass(type_, BaseModel):
+        for field in type_.__fields__.values():
             yield field.name, field.type_
-    elif is_attr_class(model):
-        for field in model.__attrs_attrs__:
+    elif is_attr_class(type_):
+        for field in type_.__attrs_attrs__:
             yield field.name, field.type
-    elif is_dataclass(model):
-        for field in model.__dataclass_fields__.values():
+    elif is_dataclass(type_):
+        for field in type_.__dataclass_fields__.values():
             yield field.name, field.type
     else:
-        raise TypeError("value isn't a model type")
+        raise TypeError(f"{type_} value isn't a model type")
 
 
 def _traveler(
@@ -70,13 +97,13 @@ def _traveler(
     prefix: str,
     loc: Tuple[str, ...],
     case_reducer: Callable[[str], str],
-) -> Iterator[Tuple[str, _NestedMappingPath]]:
+) -> Iterator[Tuple[str, _FieldLocDescription]]:
     for field_name, field_type in _list_fields(model):
         upper_field_name = case_reducer(field_name)
         new_prefix = f'{prefix}_{upper_field_name}'
         new_loc = loc + (field_name,)
         is_complex, is_only_complex = _estimate_field_complexity(field_type)
-        yield new_prefix, (new_loc, is_complex, is_only_complex)
+        yield new_prefix, _FieldLocDescription(new_loc, is_complex, is_only_complex)
         if is_complex:
             yield from _traveler(
                 cast(AnyModelType, field_type), new_prefix, new_loc, case_reducer
@@ -85,18 +112,27 @@ def _traveler(
 
 def _build_model_flat_map(
     model: Type[BaseModel], prefix: str, case_reducer: Callable[[str], str]
-) -> Dict[str, _NestedMappingPath]:
+) -> Dict[str, _FieldLocDescription]:
     return dict(_traveler(model, prefix, (), case_reducer))
 
 
+FlatMapLocation = Tuple[str, Optional[TextLocation]]
+
+
 class FlatMapValues(Dict[str, Json]):
-    __slots__ = 'restored_values', 'restore_errs'
+    __slots__ = 'restored_env_values', 'restored_text_values'
 
-    def __init__(self, restored_values: Dict[ModelLocation, str], **values: Json):
+    def __init__(
+        self,
+        restored_env_values: Dict[ModelLocation, str],
+        restored_text_values: Dict[str, Union[TextValues, Dict]],
+        **values: Json,
+    ):
         super().__init__(**values)
-        self.restored_values = restored_values
+        self.restored_env_values = restored_env_values
+        self.restored_text_values = restored_text_values
 
-    def get_location(self, val_loc: ModelLocation) -> str:
+    def get_location(self, val_loc: ModelLocation) -> FlatMapLocation:
         """
         Maps model location to flat-mapping location, preserving original case
 
@@ -104,7 +140,33 @@ class FlatMapValues(Dict[str, Json]):
         :raises KeyError: in case if such value hasn't been restored
         :return: flat-mapping location
         """
-        return self.restored_values[val_loc]
+        try:
+            return self._get_location(val_loc)
+        except KeyError:
+            raise KeyError(val_loc)
+
+    def _get_location(self, val_loc: ModelLocation) -> FlatMapLocation:
+        try:
+            return self.restored_env_values[val_loc], None
+        except KeyError:
+            pass
+
+        loc_iter = iter(val_loc)
+
+        key_used: Optional[str] = None
+        text_vals: Optional[TextValues] = None
+
+        curr = self.restored_text_values
+        for part in loc_iter:
+            curr = curr[part]
+            if isinstance(curr, tuple):
+                key_used, text_vals = curr
+                break
+
+        if text_vals is None:
+            raise KeyError(val_loc)
+
+        return key_used, text_vals.get_location(tuple(loc_iter))
 
 
 class InvalidAssignError(ValueError):
@@ -112,9 +174,15 @@ class InvalidAssignError(ValueError):
     Describes error occurrence and it location while applying some flat value
     """
 
-    def __init__(self, loc: Sequence[str], key: str):
+    def __init__(self, loc: Optional[Sequence[str]], key: str):
         self.loc = loc
         self.key = key
+
+
+class CannotParseValueError(InvalidAssignError):
+    """Value provided by `key` expected to be parsable for `loc`"""
+
+    pass
 
 
 class AssignBeyondSimpleValueError(InvalidAssignError):
@@ -151,7 +219,7 @@ class ModelShapeRestorer(object):
         model: AnyModelType,
         prefix: str,
         case_sensitive: bool,
-        dead_end_value_resolver: Callable[[str], _RecStrDict],
+        dead_end_value_resolver: Callable[[str], TextValues],
     ):
         self._case_reducer = _noop if case_sensitive else str.casefold
         self._prefix = self._case_reducer(prefix)
@@ -171,58 +239,61 @@ class ModelShapeRestorer(object):
     def restore(
         self, flat_map: Mapping[str, str]
     ) -> Tuple['FlatMapValues', Optional[Sequence[InvalidAssignError]]]:
-        target: Dict[str, Json] = {}
         errs: List[InvalidAssignError] = []
-        consumed: Dict[ModelLocation, str] = {}
+        target: Dict[str, Json] = {}
+        consumed_envs: Dict[ModelLocation, str] = {}
+
+        def default_dict_factory():
+            return defaultdict(default_dict_factory)
+
+        consumed_text_vals = default_dict_factory()
+
         for orig_key, val in flat_map.items():
             key = self._case_reducer(orig_key)
             if not key.startswith(self._prefix):
                 continue
+
             try:
                 path, is_complex, is_only_complex = self._model_flat_map[key]
             except KeyError:
                 continue
+
+            if is_complex or is_only_complex:
+                try:
+                    val = self._dead_end_resolver(val)
+                    assert isinstance(val, TextValues), 'Check is correct decoder used'
+                    reduce(
+                        lambda curr, item: curr[item], path[:-1], consumed_text_vals
+                    )[path[-1]] = (orig_key, val)
+                except ParsingError as err:
+                    if is_only_complex:
+                        new_err = CannotParseValueError(path, orig_key)
+                        new_err.__cause__ = err.cause
+                        errs.append(new_err)
+                        continue
+
             try:
-                self._apply_path_value(
-                    target, path, is_complex, is_only_complex, orig_key, val
-                )
+                _apply_path_value(target, path, orig_key, val)
             except InvalidAssignError as e:
                 errs.append(e)
             else:
-                consumed[tuple(path)] = orig_key
+                consumed_envs[path] = orig_key
 
-        return FlatMapValues(consumed, **target), errs
+        return FlatMapValues(consumed_envs, consumed_text_vals, **target), errs
 
-    def _apply_path_value(
-        self,
-        root: JsonDict,
-        path: Sequence[str],
-        is_complex: bool,
-        is_only_complex: bool,
-        orig_key: str,
-        value: str,
-    ):
-        curr_segment: Any = root
-        for path_part in path[:-1]:
-            try:
-                next_segment = curr_segment[path_part]
-            except KeyError:
-                next_segment = {}
-                curr_segment[path_part] = next_segment
 
-            if isinstance(next_segment, str):
-                try:
-                    next_segment = self._dead_end_resolver(curr_segment)
-                except (ValueError, TypeError) as e:
-                    raise AssignBeyondSimpleValueError(path, orig_key) from e
-                curr_segment[path_part] = next_segment
+def _apply_path_value(
+    root: JsonDict, path: Sequence[str], orig_key: str, value: Union[str, JsonDict]
+):
+    curr_segment: Any = root
+    for path_part in path[:-1]:
+        if not isinstance(curr_segment, dict):
+            raise AssignBeyondSimpleValueError(path, orig_key)
+        try:
+            next_segment = curr_segment[path_part]
+        except KeyError:
+            next_segment = {}
+            curr_segment[path_part] = next_segment
 
-            curr_segment = next_segment
-
-        if is_complex:
-            try:
-                value = self._dead_end_resolver(value)
-            except (ValueError, KeyError) as e:
-                if is_only_complex:
-                    raise InvalidAssignError(path, orig_key) from e
-        curr_segment[path[-1]] = value
+        curr_segment = next_segment
+    curr_segment[path[-1]] = value
