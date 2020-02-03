@@ -4,7 +4,7 @@ import attr
 from pydantic import BaseModel, Schema
 from pytest import mark
 
-from pydantic_settings.attrs_docs import extract_class_attrib_docs, with_attrs_docs
+from pydantic_settings.attrs_docs import with_attrs_docs
 
 
 class SphinxLikeAttribDocs:
@@ -101,80 +101,5 @@ def test_pydantic_model_field_description_without_overriding():
 
     assert (
         PydanticModelFieldDocsModel.__fields__['bar'].schema.description
-        == 'TEST OLD DESCRIPTION'
-    )
-
-
-def test_dataclass_model_field_description():
-    @with_attrs_docs
-    @dataclasses.dataclass
-    class DataclassFieldDocsModel:
-        bar: int
-        """bar description"""
-
-    assert (
-        DataclassFieldDocsModel.__dataclass_fields__['bar'].metadata['doc']
-        == 'bar description'
-    )
-
-
-def test_dataclass_model_field_description_with_overriding():
-    @with_attrs_docs(override_existed=True)
-    @dataclasses.dataclass
-    class DataclassFieldDocsModel:
-        bar: int = dataclasses.field(metadata={'doc': 'TEST OLD DESCRIPTION'})
-        """bar description"""
-
-    assert (
-        DataclassFieldDocsModel.__dataclass_fields__['bar'].metadata['doc']
-        == 'bar description'
-    )
-
-
-def test_dataclass_model_field_description_without_overriding():
-    @with_attrs_docs(override_existed=False)
-    @dataclasses.dataclass
-    class DataclassFieldDocsModel:
-        bar: int = dataclasses.field(metadata={'doc': 'TEST OLD DESCRIPTION'})
-        """bar description"""
-
-    assert (
-        DataclassFieldDocsModel.__dataclass_fields__['bar'].metadata['doc']
-        == 'TEST OLD DESCRIPTION'
-    )
-
-
-@mark.xfail(reason='not implemented due to attr technical details')
-def test_attrs_model_field_description():
-    @with_attrs_docs
-    @attr.dataclass
-    class AttrsFieldDocsModel:
-        bar: int
-        """bar description"""
-
-    assert AttrsFieldDocsModel.__attrs_attrs__.bar.metadata['doc'] == 'bar description'
-
-
-@mark.xfail(reason='not implemented due to attr technical details')
-def test_attrs_model_field_description_with_overriding():
-    @with_attrs_docs(override_existed=True)
-    @attr.dataclass
-    class AttrsFieldDocsModel:
-        bar: int = attr.attrib(metadata={'doc': 'TEST OLD DESCRIPTION'})
-        """bar description"""
-
-    assert AttrsFieldDocsModel.__attrs_attrs__.bar.metadata['doc'] == 'bar description'
-
-
-@mark.xfail(reason='not implemented due to attr technical details')
-def test_attrs_model_field_description_without_overriding():
-    @with_attrs_docs(override_existed=False)
-    @attr.dataclass
-    class AttrsFieldDocsModel:
-        bar: int = attr.attrib(metadata={'doc': 'TEST OLD DESCRIPTION'})
-        """bar description"""
-
-    assert (
-        AttrsFieldDocsModel.__attrs_attrs__.bar.metadata['doc']
         == 'TEST OLD DESCRIPTION'
     )

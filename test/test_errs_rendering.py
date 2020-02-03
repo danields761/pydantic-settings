@@ -6,12 +6,15 @@ from pytest import mark
 from pydantic_settings import LoadingValidationError, TextLocation
 from pydantic_settings.errors import ExtendedErrorWrapper
 
+from .test_settings_base import Model1
+
 
 @mark.parametrize(
     'args, res',
     [
         (
             (
+                Model1,
                 [
                     ExtendedErrorWrapper(
                         FloatError(),
@@ -27,6 +30,7 @@ foo -> bar from env "T_FOO_BAR" [10:20]
         ),
         (
             (
+                Model1,
                 [
                     ExtendedErrorWrapper(
                         FloatError(),

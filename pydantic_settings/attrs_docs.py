@@ -1,83 +1,54 @@
 import ast
-import dataclasses
 import inspect
 import textwrap
-from typing import Dict, Type, Mapping, Optional
+from typing import Dict, Type, Optional
 
-import attr
-from pydantic import BaseModel
+from class_doc import extract_docs_from_cls_obj
 
-from pydantic_settings.types import AnyModelType
-
-
-def extract_class_attrib_docs(class_def: Type) -> Dict[str, str]:
-    """
-    Extract attributes documentation.
-
-    :param class_def: type object (instances allowed as well) of a some class definition
-
-    :raise ValueError: in case if given object can't provide sources.
-    :raise TypeError: in case if object isn't a class definition
-
-    :return: mapping "field name" => "extracted docstring"
-    """
-    # TODO
-    #  class fields may be documented in class-docstring using "ivar", "var"
-    #  or numpy "attributes" directives
-    return extract_sphinx_class_attrib_docs(class_def)
+from pydantic_settings.types import (
+    AnyPydanticModel,
+    PydanticDataclass,
+    is_pydantic_dataclass,
+)
 
 
-def apply_attributes_docs(model: AnyModelType, *, override_existed: bool = True):
+def apply_attributes_docs(
+    model: Type[AnyPydanticModel], *, override_existing: bool = True
+):
     """
     Apply model attributes documentation in-place. Resulted docs may be found inside
-    :code:`field.schema.description` for *pydantic* model field,
-    inside :code:`field.metadata['doc']` for *dataclass* field and inside
-    :code:`attribute.metadata['doc']` for *attr* attribute. See
-    :py:func:`.extract_class_attrib_docs` for more details how extraction is performed.
+    :code:`field.schema.description` for *pydantic* model field
 
-    :param model: either `pydantic.BaseModel` or `attr` or `dataclass`
-    :param override_existed: override existing descriptions
+    :param model: any pydantic model
+    :param override_existing: override existing descriptions
     """
-    docs = extract_class_attrib_docs(model)
+    if is_pydantic_dataclass(model):
+        apply_attributes_docs(
+            model.__pydantic_model__, override_existing=override_existing
+        )
+        return
 
-    if issubclass(model, BaseModel):
-        for field in model.__fields__.values():
-            if field.schema.description and not override_existed:
-                continue
+    docs = extract_docs_from_cls_obj(model)
 
-            try:
-                field.schema.description = docs[field.name]
-            except KeyError:
-                pass
-    elif attr.has(model):
-        # TODO figure out how attribute.metadata may be changed, since attr
-        #  internals read-only
-        raise NotImplementedError
-    elif dataclasses.is_dataclass(model):
-        for field in dataclasses.fields(model):
-            if (
-                isinstance(field.metadata, Mapping)
-                and 'doc' in field.metadata
-                and not override_existed
-                or not isinstance(field.metadata, Mapping)
-            ):
-                continue
+    for field in model.__fields__.values():
+        if field.schema.description and not override_existing:
+            continue
 
-            try:
-                field.metadata = {**(field.metadata or {}), 'doc': docs[field.name]}
-            except KeyError:
-                pass
+        try:
+            field.schema.description = docs[field.name]
+        except KeyError:
+            pass
 
 
 def with_attrs_docs(
-    model_cls: Optional[AnyModelType] = None, *, override_existed: bool = True
+    model_cls: Optional[AnyPydanticModel] = None, *, override_existed: bool = True
 ):
     """
     Decorator which applies :py:func:`.apply_attributes_docs`
     """
 
-    def decorator(maybe_model_cls: AnyModelType):
-        apply_attributes_docs(maybe_model_cls, override_existed=override_existed)
+    def decorator(maybe_model_cls: AnyPydanticModel):
+        apply_attributes_docs(maybe_model_cls, override_existing=override_existed)
         return maybe_model_cls
 
     if model_cls is None:
@@ -110,45 +81,3 @@ def extract_ast_fields_docs_from_classdef(tree: ast.ClassDef) -> Dict[str, str]:
             expect_str_def_for = ''
 
     return collected
-
-
-def extract_sphinx_class_attrib_docs(model: Type) -> Dict[str, str]:
-    """
-    Extract Sphinx-style class attributes documentation from class definition.
-
-    Doesn't performs lookup for base classes.
-
-    Skips fields which is defined with multiple assignment syntax like :code:`foo, bar,
-    ... = 'some', 'values', ...` because it really unclear, for which attribute the docs
-    should be assigned.
-
-    :param model: type object (instances allowed as well) of a some class definition
-
-    :raise ValueError: in case if given object can't provide sources.
-    :raise TypeError: in case if object isn't a class definition
-
-    :return: mapping "field name" => "extracted docstring"
-    """
-    model_cls = model if isinstance(model, type) else type(model)
-    try:
-        sources = inspect.getsource(model_cls)
-    except OSError as e:
-        raise ValueError(f'unable to get "{model_cls}" sources') from e
-    except TypeError as e:
-        if 'is a built-in class' in str(e):
-            raise ValueError(f'does not works with build-in objects') from e
-        raise
-
-    # clean indentation for inline class definitions
-    sources = textwrap.dedent(sources)
-
-    parsed = ast.parse(sources, inspect.getfile(model_cls))
-    assert isinstance(parsed, ast.Module)
-    definition = parsed.body[0]
-    if not isinstance(definition, ast.ClassDef):
-        raise TypeError(
-            f'definition {model_cls} is not a class '
-            f'definition, found root type {type(definition)}'
-        )
-
-    return extract_ast_fields_docs_from_classdef(definition)

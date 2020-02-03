@@ -1,7 +1,18 @@
 from pathlib import Path
-from typing import Any, Optional, Tuple, Dict, Sequence, Union, Iterator, Iterable, List
+from typing import (
+    Any,
+    Optional,
+    Tuple,
+    Dict,
+    Sequence,
+    Union,
+    Iterator,
+    Iterable,
+    List,
+    Type,
+)
 
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 from pydantic.error_wrappers import ErrorWrapper
 
 from pydantic_settings.decoder import TextLocation, DecoderMeta
@@ -81,8 +92,13 @@ class LoadingValidationError(LoadingError, ValidationError):
 
     __slots__ = 'file_path', 'cause', 'msg'
 
-    def __init__(self, raw_errors: Sequence[ErrorWrapper], file_path: Optional[Path]):
-        ValidationError.__init__(self, raw_errors)
+    def __init__(
+        self,
+        model: Type[BaseModel],
+        raw_errors: Sequence[ErrorWrapper],
+        file_path: Optional[Path],
+    ):
+        ValidationError.__init__(self, raw_errors, model)
         super().__init__(file_path, None)
 
     def per_location_errors(
@@ -221,6 +237,7 @@ def _flatten_errors_wrappers(
 
 
 def with_errs_locations(
+    model: Type[BaseModel],
     validation_err: ValidationError,
     values_source: SourceLocationProvider[Union[FlatMapLocation, TextLocation]],
 ) -> ValidationError:
@@ -239,4 +256,4 @@ def with_errs_locations(
 
         err_wrappers.append(raw_err)
 
-    return ValidationError(err_wrappers)
+    return ValidationError(err_wrappers, model)

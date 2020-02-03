@@ -65,7 +65,7 @@ class BaseSettingsModel(BaseModel):
         )
         if config.build_attr_docs:
             apply_attributes_docs(
-                cls, override_existed=config.override_exited_attrs_docs
+                cls, override_existing=config.override_exited_attrs_docs
             )
 
     @classmethod
@@ -105,9 +105,9 @@ class BaseSettingsModel(BaseModel):
             if validation_err is not None:
                 validation_err.raw_errors += env_errs_as_ew
             else:
-                validation_err = ValidationError(env_errs_as_ew)
+                validation_err = ValidationError(env_errs_as_ew, cls)
 
         if validation_err:
-            raise with_errs_locations(validation_err, env_vars_applied)
+            raise with_errs_locations(cls, validation_err, env_vars_applied)
 
         return res

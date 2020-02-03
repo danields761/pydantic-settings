@@ -147,10 +147,10 @@ def load_settings(
         new_err = err
 
         if file_values is not None:
-            new_err = with_errs_locations(err, file_values)
+            new_err = with_errs_locations(cls, err, file_values)
         if env_values is not None:
-            new_err = with_errs_locations(new_err, env_values)
+            new_err = with_errs_locations(cls, new_err, env_values)
 
-        raise LoadingValidationError(new_err.raw_errors, file_path) from err
+        raise LoadingValidationError(cls, new_err.raw_errors, file_path) from err
 
     return result
