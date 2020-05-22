@@ -28,13 +28,13 @@ def test_invalid_env_var_assignment():
     missing_field_err = exc_info.value.raw_errors[0]
     env_undecodable_value_err = exc_info.value.raw_errors[1]
 
-    assert env_undecodable_value_err.loc == ('baz',)
+    assert env_undecodable_value_err.loc_tuple() == ('baz',)
     assert isinstance(env_undecodable_value_err, ExtendedErrorWrapper)
     assert env_undecodable_value_err.source_loc == ('APP_BAZ', None)
     assert isinstance(env_undecodable_value_err.exc, json.JSONDecodeError)
 
     assert not isinstance(missing_field_err, ExtendedErrorWrapper)
-    assert missing_field_err.loc == ('baz',)
+    assert missing_field_err.loc_tuple() == ('baz',)
     assert isinstance(missing_field_err.exc, MissingError)
 
 
@@ -54,4 +54,4 @@ def test_settings_model_attrs_docs_created_automatically():
         bar: int
         """bar description"""
 
-    assert SettingsModel.__fields__['bar'].schema.description == 'bar description'
+    assert SettingsModel.__fields__['bar'].field_info.description == 'bar description'

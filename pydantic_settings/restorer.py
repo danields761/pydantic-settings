@@ -1,4 +1,3 @@
-import bisect
 from collections import defaultdict
 from dataclasses import is_dataclass
 from functools import reduce
@@ -20,8 +19,8 @@ from typing import (
 from attr import has as is_attr_class
 from pydantic import BaseModel
 
-from pydantic_settings.decoder import TextValues, ParsingError, TextLocation
-from pydantic_settings.types import JsonDict, AnyModelType, Json, ModelLocation
+from pydantic_settings.decoder import TextValues, ParsingError
+from pydantic_settings.types import JsonDict, AnyModelType, Json, ModelLoc, FlatMapLoc
 from pydantic_settings.utils import get_union_subtypes
 
 
@@ -116,15 +115,12 @@ def _build_model_flat_map(
     return dict(_traveler(model, prefix, (), case_reducer))
 
 
-FlatMapLocation = Tuple[str, Optional[TextLocation]]
-
-
 class FlatMapValues(Dict[str, Json]):
     __slots__ = 'restored_env_values', 'restored_text_values'
 
     def __init__(
         self,
-        restored_env_values: Dict[ModelLocation, str],
+        restored_env_values: Dict[ModelLoc, str],
         restored_text_values: Dict[str, Union[TextValues, Dict]],
         **values: Json,
     ):
@@ -132,7 +128,7 @@ class FlatMapValues(Dict[str, Json]):
         self.restored_env_values = restored_env_values
         self.restored_text_values = restored_text_values
 
-    def get_location(self, val_loc: ModelLocation) -> FlatMapLocation:
+    def get_location(self, val_loc: ModelLoc) -> FlatMapLoc:
         """
         Maps model location to flat-mapping location, preserving original case
 
@@ -145,7 +141,7 @@ class FlatMapValues(Dict[str, Json]):
         except KeyError:
             raise KeyError(val_loc)
 
-    def _get_location(self, val_loc: ModelLocation) -> FlatMapLocation:
+    def _get_location(self, val_loc: ModelLoc) -> FlatMapLoc:
         try:
             return self.restored_env_values[val_loc], None
         except KeyError:
@@ -241,7 +237,7 @@ class ModelShapeRestorer(object):
     ) -> Tuple['FlatMapValues', Optional[Sequence[InvalidAssignError]]]:
         errs: List[InvalidAssignError] = []
         target: Dict[str, Json] = {}
-        consumed_envs: Dict[ModelLocation, str] = {}
+        consumed_envs: Dict[ModelLoc, str] = {}
 
         def default_dict_factory():
             return defaultdict(default_dict_factory)

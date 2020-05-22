@@ -3,22 +3,22 @@ from typing import Union, TextIO
 
 import yaml
 
-from pydantic_settings.types import ModelLocation
+from pydantic_settings.types import ModelLoc
 from .common import (
-    TextLocation,
     LocationLookupError,
     MappingExpectError,
     ListExpectError,
     TextValues,
     ParsingError,
 )
+from .. import TextLocation
 
 
 class _LocationFinder:
     def __init__(self, root_node: yaml.Node):
         self._node = root_node
 
-    def get_location(self, key: ModelLocation) -> TextLocation:
+    def get_location(self, key: ModelLoc) -> TextLocation:
         try:
             node = self._lookup_node_by_loc(key)
         except LocationLookupError as err:
@@ -33,7 +33,7 @@ class _LocationFinder:
             node.end_mark.pointer,
         )
 
-    def _lookup_node_by_loc(self, key: ModelLocation) -> yaml.Node:
+    def _lookup_node_by_loc(self, key: ModelLoc) -> yaml.Node:
         curr_node = self._node
         if curr_node is None:
             raise LocationLookupError(key, -1)

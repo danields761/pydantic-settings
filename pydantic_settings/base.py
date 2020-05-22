@@ -1,4 +1,4 @@
-from typing import Any, Type, cast, Mapping, TypeVar
+from typing import Any, Type, cast, Mapping, TypeVar, ClassVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -54,6 +54,8 @@ class BaseSettingsModel(BaseModel):
         """
         Override existed fields descriptions by attributes docs.
         """
+
+    shape_restorer: ClassVar[ModelShapeRestorer]
 
     def __init_subclass__(cls, **kwargs):
         config = cast(cls.Config, cls.__config__)

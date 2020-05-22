@@ -2,27 +2,12 @@ from typing import Dict, Optional
 
 from attr import dataclass
 
-from pydantic_settings.types import Json, ModelLocation, SourceLocationProvider
-
-
-@dataclass
-class TextLocation:
-    """
-    Describes symbol occurrence inside inside a text
-    """
-
-    line: int
-    col: int
-    end_line: int
-    end_col: int
-
-    pos: int
-    end_pos: int
+from pydantic_settings.types import Json, ModelLoc, SourceLocProvider, TextLocation
 
 
 @dataclass
 class LocationLookupError(ValueError):
-    key: ModelLocation
+    key: ModelLoc
     part_pos: int
 
     def __attrs_post_init__(self):
@@ -44,11 +29,11 @@ class ListExpectError(LocationLookupError):
 class TextValues(Dict[str, Json]):
     __slots__ = ('location_finder',)
 
-    def __init__(self, finder: SourceLocationProvider[TextLocation], **values: Json):
+    def __init__(self, finder: SourceLocProvider[TextLocation], **values: Json):
         super().__init__(**values)
         self.location_finder = finder
 
-    def get_location(self, val_loc: ModelLocation) -> TextLocation:
+    def get_location(self, val_loc: ModelLoc) -> TextLocation:
         """
         Maps model location to text location.
 

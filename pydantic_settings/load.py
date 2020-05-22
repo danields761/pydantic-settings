@@ -2,12 +2,18 @@ import json
 from io import StringIO
 from os import environ as os_environ
 from pathlib import Path
-from typing import Type, TextIO, Optional, List, Union, Mapping, Tuple
+from typing import Type, TextIO, Optional, Union, Mapping, Tuple, TypeVar, Callable
 
 from pydantic import BaseModel, ValidationError
 
 from pydantic_settings.base import BaseSettingsModel
-from pydantic_settings.decoder import get_decoder, DecoderMeta, ParsingError, TextValues
+from pydantic_settings.decoder import (
+    get_decoder,
+    DecoderMeta,
+    ParsingError,
+    TextValues,
+    DecoderNotFoundError,
+)
 from pydantic_settings.errors import (
     LoadingError,
     LoadingValidationError,
@@ -19,57 +25,53 @@ from pydantic_settings.types import JsonDict
 from pydantic_settings.utils import deep_merge_mappings
 
 
-def _resolve_arguments(
-    any_content: Union[TextIO, str, Path], type_hint: str = None
+def _resolve_content_arg(
+    any_content: Union[TextIO, str, Path],
+    type_hint: str,
+    content_reader: Callable[[Path], str],
 ) -> Tuple[DecoderMeta, Optional[Path], str]:
-    if isinstance(any_content, Path):
-        file_path = Path(any_content)
+    def decoder_by_type_hint(file_path_: Path = None) -> DecoderMeta:
         try:
-            content = file_path.read_text()
+            return get_decoder(type_hint)
+        except DecoderNotFoundError as err_:
+            raise LoadingError(file_path_, err_)
+
+    if isinstance(any_content, Path):
+        file_path = any_content
+        try:
+            content = content_reader(file_path)
         except FileNotFoundError as err:
             raise LoadingError(file_path, err)
+
+        try:
+            return get_decoder(file_path.suffix), file_path, content
+        except DecoderNotFoundError as err:
+            if type_hint is None:
+                raise LoadingError(
+                    file_path,
+                    err,
+                    f'cannot determine decoder from file suffix "{file_path.suffix}"',
+                )
+
+            return decoder_by_type_hint(file_path), file_path, content
     else:
         if isinstance(any_content, StringIO):
-            file_path = None
             content = any_content.getvalue()
         elif isinstance(any_content, str):
             content = any_content
-            file_path = None
         else:
-            file_path = Path(any_content.name)
             content = any_content.read()
 
-    if type_hint is not None:
-        try:
-            return get_decoder(type_hint), file_path, content
-        except TypeError:
-            pass
+        if type_hint is None:
+            raise LoadingError(
+                None,
+                None,
+                f'"type_hint" argument is required if '
+                f'content is not an instance of "{Path.__module__}.'
+                f'{Path.__qualname__}" class',
+            )
 
-    if file_path:
-        file_extension = file_path.suffix
-        if file_extension != '':
-            try:
-                return get_decoder(file_extension), file_path, content
-            except TypeError:
-                pass
-    else:
-        file_extension = None
-
-    err_parts: List[str] = []
-    if type_hint is not None:
-        err_parts.append(f'type hint "{type_hint}"')
-    if file_extension is not None:
-        err_parts.append(f'file extension "{file_extension}"')
-
-    if type_hint is None and file_extension is None:
-        msg = (
-            'unable to find suitable decoder because no hints provided: '
-            'expecting either file extension or "type_hint" argument'
-        )
-    else:
-        msg = f'unable to find suitable decoder, hints used: {", ".join(err_parts)}'
-
-    raise LoadingError(file_path, msg=msg)
+        return decoder_by_type_hint(), None, content
 
 
 def _get_shape_restorer(cls: Type[BaseModel], env_prefix: str) -> ModelShapeRestorer:
@@ -81,36 +83,42 @@ def _get_shape_restorer(cls: Type[BaseModel], env_prefix: str) -> ModelShapeRest
     return restorer
 
 
+SettingsM = TypeVar('SettingsM', bound=BaseModel)
+
+
 def load_settings(
-    cls: Type[BaseModel],
+    cls: Type[SettingsM],
     any_content: Union[None, TextIO, str, Path] = None,
     *,
     type_hint: str = None,
     load_env: bool = False,
     env_prefix: str = 'APP',
-    _environ: Mapping[str, str] = None,
-) -> BaseModel:
+    environ: Mapping[str, str] = None,
+    _content_reader: Callable[[Path], str] = Path.read_text,
+) -> SettingsM:
     """
-    Load settings from file and/or environment variables and binds them to a
-    *pydantic* model. Supports *json*, *yaml* and *toml* formats. File format choice
-    is complex a bit: firstly, if `type_hint` is provided, this value is tried to
-    find decoder, in case of failure, if file path is provided or content stream has
-    :code:`name` attribute and file name have common extension ("yaml", "json" etc),
-    appropriate decoder is used, otherwise exception is raised.
+    Load setting from provided content and merge with environment variables.
+    Content may be loaded from file path, from file-like source or from plain text.
 
-    :param cls: model class
-    :param any_content: configuration file name as `Path` or text content as string
-        or stream
-    :param type_hint: type hint from which appropriate decoder may be chosen, make
-        sense if settings content provided
-    :param load_env: load environment variables
-    :param env_prefix: if given model isn't :py:class:`BaseSettingsModel` subclass,
-        only environment variables beginning with suck value is taken
-    :param _environ: semi-private parameter intended to easily mock environ from tests
+    If there is requirement to load settings only from environment variables, then
+    `content` argument may be omitted.
+
+    :param cls: either :py:class:`BaseSettingsModel` or :py:class:`pydantic.BaseModel`
+        subclass type. The result will be instance of a given type.
+    :param any_content: content from which settings will be loaded
+    :param type_hint: determines content decoder. Required, if content isn't provided
+        as a file path (e.g. content isn't instance of `pathlib.Path`). Takes
+        precedence over actual file suffix.
+    :param load_env: determines whether load environment variables or not
+    :param env_prefix: determines prefix used to match model field with appropriate
+        environment variable. *NOTE* if `cls` argument is subclass of
+        :py:class:`BaseSettingsModel` then `env_prefix` argument will be ignored.
+    :param environ: environment variables mapping, in case if this argument is `None`
+        `os.environ` will be used
 
     :raises LoadingError: in case if any error occurred while loading settings
 
-    :return: settings model instance
+    :return: instance of settings model, provided by `cls` argument
     """
     if any_content is None and not load_env:
         raise LoadingError(None, msg='no sources provided to load settings from')
@@ -120,7 +128,9 @@ def load_settings(
     content: Optional[str] = None
 
     if any_content is not None:
-        decoder_desc, file_path, content = _resolve_arguments(any_content, type_hint)
+        decoder_desc, file_path, content = _resolve_content_arg(
+            any_content, type_hint, _content_reader
+        )
 
     document_content: Optional[JsonDict] = None
     file_values: Optional[TextValues] = None
@@ -137,7 +147,7 @@ def load_settings(
     if load_env:
         # TODO: ignore env vars restoration errors so far
         restorer = _get_shape_restorer(cls, env_prefix)
-        env_values, _ = restorer.restore(_environ or os_environ)
+        env_values, _ = restorer.restore(environ or os_environ)
         document_content = deep_merge_mappings(env_values, document_content)
 
     try:
@@ -151,6 +161,6 @@ def load_settings(
         if env_values is not None:
             new_err = with_errs_locations(cls, new_err, env_values)
 
-        raise LoadingValidationError(cls, new_err.raw_errors, file_path) from err
+        raise LoadingValidationError(new_err.raw_errors, cls, file_path) from err
 
     return result

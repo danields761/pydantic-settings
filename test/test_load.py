@@ -1,6 +1,7 @@
 import tempfile
 from io import StringIO
 from pathlib import Path
+from textwrap import dedent
 from typing import List
 
 from pydantic import IntegerError, FloatError, StrError
@@ -13,6 +14,21 @@ from pydantic_settings import (
     TextLocation,
     LoadingValidationError,
 )
+from pydantic_settings.errors import ExtendedErrorWrapper
+
+
+def per_location_errors(load_err):
+    return (
+        (raw_err.source_loc, raw_err.exc)
+        for raw_err in load_err.raw_errors
+        if isinstance(raw_err, ExtendedErrorWrapper)
+    )
+
+
+def dedent_test_str(test_str):
+    return ' '.join(
+        line.strip() for line in dedent(test_str).split('\n') if len(line) > 0
+    )
 
 
 class Settings(BaseSettingsModel):
@@ -82,14 +98,14 @@ class Settings2(BaseSettingsModel):
 def test_validation_errors(model_cls, content, environ, locations):
     with raises(LoadingError) as exc_info:
         load_settings(
-            model_cls, content, type_hint='json', load_env=True, _environ=environ
+            model_cls, content, type_hint='json', load_env=True, environ=environ
         )
 
     assert exc_info.type is LoadingValidationError
-    assert [loc for loc, _ in exc_info.value.per_location_errors()] == [
+    assert [loc for loc, _ in per_location_errors(exc_info.value)] == [
         loc for loc, _ in locations
     ]
-    assert [type(err) for _, err in exc_info.value.per_location_errors()] == [
+    assert [type(err) for _, err in per_location_errors(exc_info.value)] == [
         err_cls for _, err_cls in locations
     ]
 
@@ -107,38 +123,31 @@ def empty_tmp_file_creator(extension):
     'any_content, load_env, type_hint, expect_err_msg',
     [
         (
-            empty_tmp_file_creator('cfg'),
+            Path('/not/exists.cfg'),
             False,
             None,
-            'unable to find suitable decoder, hints used: file extension ".cfg"',
+            """LoadingError: Loader ".cfg" isn't supported""",
         ),
-        (
-            '',
-            False,
-            'ini',
-            'unable to find suitable decoder, hints used: type hint "ini"',
-        ),
-        (
-            StringIO(''),
-            False,
-            'ini',
-            'unable to find suitable decoder, hints used: type hint "ini"',
-        ),
+        ('', False, 'ini', """LoadingError: Loader "ini" isn't supported""",),
+        (StringIO(''), False, 'ini', """LoadingError: Loader "ini" isn't supported""",),
         (
             StringIO(''),
             False,
             None,
-            'unable to find suitable decoder because no hints provided: '
-            + 'expecting either file extension or "type_hint" argument',
+            dedent_test_str(
+                """
+                LoadingError: "type_hint" argument is required if content is not an
+                instance of "pathlib.Path" class
+                """
+            ),
         ),
         (
-            empty_tmp_file_creator('cfg'),
+            Path('/not/exists.cfg'),
             False,
             'DEFINITELY NOT A TYPE HINT',
-            'unable to find suitable decoder, hints used: '
-            'type hint "DEFINITELY NOT A TYPE HINT", file extension ".cfg"',
+            """LoadingError: Loader "DEFINITELY NOT A TYPE HINT" isn't supported""",
         ),
-        (None, False, None, 'no sources provided to load settings from'),
+        (None, False, None, 'LoadingError: no sources provided to load settings from'),
     ],
 )
 def test_load_settings_general_errors(any_content, load_env, type_hint, expect_err_msg):
@@ -146,9 +155,15 @@ def test_load_settings_general_errors(any_content, load_env, type_hint, expect_e
         any_content = any_content()
 
     with raises(LoadingError) as err_info:
-        load_settings(Settings2, any_content, load_env=load_env, type_hint=type_hint)
+        load_settings(
+            Settings2,
+            any_content,
+            load_env=load_env,
+            type_hint=type_hint,
+            _content_reader=lambda _: '',
+        )
 
-    assert err_info.value.msg == expect_err_msg
+    assert str(err_info.value) == expect_err_msg
 
 
 def test_file_not_found():

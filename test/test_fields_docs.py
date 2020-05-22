@@ -1,72 +1,10 @@
 import dataclasses
 
 import attr
-from pydantic import BaseModel, Schema
+from pydantic import BaseModel, Schema, Field
 from pytest import mark
 
 from pydantic_settings.attrs_docs import with_attrs_docs
-
-
-class SphinxLikeAttribDocs:
-    foo: int
-    """foo description"""
-
-    bar: str
-    """
-    bar
-    super
-    long
-    ...
-    ...
-    description
-    """
-
-    baz: str = ''
-    """baz description"""
-
-    baf = ''
-    """baf description"""
-
-
-def test_extract_sphinx_class_attrib_docs():
-    docs = extract_class_attrib_docs(SphinxLikeAttribDocs)
-    assert all(f in docs for f in ('foo', 'bar', 'baz', 'baf'))
-
-    assert 'foo description' == docs['foo']
-    assert 'bar\nsuper\nlong\n...\n...\ndescription' == docs['bar']
-    assert 'baz description' == docs['baz']
-    assert 'baf description' == docs['baf']
-
-
-def test_extract_sphinx_class_attrib_docs_from_inline_def():
-    class Inline:
-        bar: int
-        """bar description"""
-
-    docs = extract_class_attrib_docs(Inline)
-    assert docs['bar'] == 'bar description'
-
-
-class ClassDocAttribDocs:
-    """
-    :ivar bar: bar description
-    :var baz: baz description
-    :var baf: baf
-    long
-    description
-    """
-
-    bar: int
-    baz: int
-    baf: int
-
-
-@mark.xfail(reason='not yet implemented')
-def test_extract_docstring_class_attrib_docs():
-    docs = extract_class_attrib_docs(ClassDocAttribDocs)
-    assert 'bar description' == docs['bar']
-    assert 'baz description' == docs['baz']
-    assert 'baf\nlong\ndeinition' == docs['baf']
 
 
 def test_pydantic_model_field_description():
@@ -76,7 +14,7 @@ def test_pydantic_model_field_description():
         """bar description"""
 
     assert (
-        PydanticModelFieldDocsModel.__fields__['bar'].schema.description
+        PydanticModelFieldDocsModel.__fields__['bar'].field_info.description
         == 'bar description'
     )
 
@@ -84,11 +22,11 @@ def test_pydantic_model_field_description():
 def test_pydantic_model_field_description_with_overriding():
     @with_attrs_docs(override_existed=True)
     class PydanticModelFieldDocsModel(BaseModel):
-        bar: int = Schema(0, description='TEST OLD DESCRIPTION')
+        bar: int = Field(0, description='TEST OLD DESCRIPTION')
         """bar description"""
 
     assert (
-        PydanticModelFieldDocsModel.__fields__['bar'].schema.description
+        PydanticModelFieldDocsModel.__fields__['bar'].field_info.description
         == 'bar description'
     )
 
@@ -96,10 +34,10 @@ def test_pydantic_model_field_description_with_overriding():
 def test_pydantic_model_field_description_without_overriding():
     @with_attrs_docs(override_existed=False)
     class PydanticModelFieldDocsModel(BaseModel):
-        bar: int = Schema(0, description='TEST OLD DESCRIPTION')
+        bar: int = Field(0, description='TEST OLD DESCRIPTION')
         """bar description"""
 
     assert (
-        PydanticModelFieldDocsModel.__fields__['bar'].schema.description
+        PydanticModelFieldDocsModel.__fields__['bar'].field_info.description
         == 'TEST OLD DESCRIPTION'
     )

@@ -1,23 +1,31 @@
+from dataclasses import asdict
 from pathlib import Path
 from typing import (
     Any,
     Optional,
     Tuple,
-    Dict,
     Sequence,
     Union,
     Iterator,
     Iterable,
-    List,
     Type,
+    Dict,
+    cast,
+    List,
 )
 
-from pydantic import ValidationError, BaseModel
-from pydantic.error_wrappers import ErrorWrapper
+from pydantic import ValidationError, BaseModel, BaseConfig
+from pydantic.error_wrappers import ErrorWrapper, error_dict
 
-from pydantic_settings.decoder import TextLocation, DecoderMeta
-from pydantic_settings.restorer import FlatMapLocation
-from pydantic_settings.types import SourceLocationProvider
+from pydantic_settings.decoder import DecoderMeta
+from pydantic_settings.types import (
+    TextLocation,
+    AnySourceLoc,
+    JsonDict,
+    ModelLoc,
+    Json,
+    AnySourceLocProvider,
+)
 
 
 class LoadingError(ValueError):
@@ -46,19 +54,10 @@ class LoadingError(ValueError):
 
         :return: rendered text string
         """
-        return (
-            f'error while loading settings from '
-            f'{self._repr_file_path()}: {str(self.cause) if self.cause else self.msg}'
-        )
+        return f'{str(self.cause) if self.cause else self.msg}'
 
     def __str__(self) -> str:
         return f'{type(self).__name__}: {self.render_error()}'
-
-    def _repr_file_path(self) -> str:
-        if self.file_path is not None:
-            return f'configuration file at "{self.file_path}"'
-        else:
-            return 'in-memory configuration text'
 
 
 class LoadingParseError(LoadingError):
@@ -79,8 +78,9 @@ class LoadingParseError(LoadingError):
 
     def render_error(self) -> str:
         return (
-            f'parsing error while loading settings from {self._repr_file_path()} '
-            f'using "{self.decoder.name} loader": {str(self.cause)}'
+            f'parsing error occurs while loading settings from '
+            f'{_render_err_file_path(self.file_path)} using "{self.decoder.name} '
+            f'loader": {str(self.cause)}'
         )
 
 
@@ -94,75 +94,24 @@ class LoadingValidationError(LoadingError, ValidationError):
 
     def __init__(
         self,
-        model: Type[BaseModel],
         raw_errors: Sequence[ErrorWrapper],
+        model: Type[BaseModel],
         file_path: Optional[Path],
     ):
         ValidationError.__init__(self, raw_errors, model)
         super().__init__(file_path, None)
 
-    def per_location_errors(
-        self
-    ) -> Iterable[Tuple[Union[FlatMapLocation, TextLocation], Exception]]:
-        return (
-            (raw_err.source_loc, raw_err.exc)
-            for raw_err in self.raw_errors
-            if isinstance(raw_err, ExtendedErrorWrapper)
-        )
+    def errors(self) -> List[Dict[str, Any]]:
+        if self._error_cache is None:
+            try:
+                config = self.model.__config__  # type: ignore
+            except AttributeError:
+                config = self.model.__pydantic_model__.__config__  # type: ignore
+            self._error_cache = serialize_errors(self, config)
+        return self._error_cache
 
     def render_error(self) -> str:
-        env_used = any(
-            raw_err.is_from_env
-            for raw_err in self.raw_errors
-            if isinstance(raw_err, ExtendedErrorWrapper)
-        )
-        nl = '\n'
-        return (
-            f'{len(self.raw_errors)} validation errors while loading settings '
-            f'from {self._repr_file_path()}'
-            f"{' and environment variables' if env_used else ''}"
-            ':\n'
-            f"""{
-                nl.join(
-                    _render_raw_error(raw_err)
-                    for raw_err in _flatten_errors_wrappers(self.raw_errors, loc=())
-                )
-            }"""
-        )
-
-
-def _render_raw_error(raw_err: ErrorWrapper) -> str:
-    return (
-        f'{_render_err_loc(raw_err)}\n'
-        f'  {raw_err.msg} ({_display_error_type_and_ctx(raw_err)})'
-    )
-
-
-def _render_err_loc(raw_err: ErrorWrapper) -> str:
-    model_loc = ' -> '.join(str(l) for l in raw_err.loc)
-    if isinstance(raw_err, ExtendedErrorWrapper):
-        if raw_err.is_from_env:
-            env_name, text_loc = raw_err.source_loc
-            from_loc = f' from env "{env_name}"'
-            if text_loc is not None:
-                from_loc += f' [{text_loc.pos}:{text_loc.end_pos}]'
-        else:
-            from_loc = (
-                f' from file at {raw_err.source_loc.line} line '
-                f'{raw_err.source_loc.col} column'
-            )
-    else:
-        from_loc = ''
-    return model_loc + from_loc
-
-
-def _display_error_type_and_ctx(error: ErrorWrapper) -> str:
-    t = 'type=' + error.type_
-    ctx = error.ctx
-    if ctx:
-        return t + ''.join(f'; {k}={v}' for k, v in ctx.items())
-    else:
-        return t
+        return render_validation_error(self)
 
 
 class ExtendedErrorWrapper(ErrorWrapper):
@@ -173,50 +122,24 @@ class ExtendedErrorWrapper(ErrorWrapper):
 
     __slots__ = ('source_loc',)
 
-    source_loc: Union[str, TextLocation]
+    source_loc: AnySourceLoc
     """
     Describes source location, corresponding to :py:attr:`pydantic.ErrorWrapper.loc`
     """
 
     def __init__(
-        self,
-        *args: Any,
-        source_loc: Union[FlatMapLocation, TextLocation] = None,
-        **kwargs: Any,
+        self, exc: Exception, loc: ModelLoc, source_loc: AnySourceLoc = None,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(exc, tuple(loc))
         self.source_loc = source_loc
 
-    @property
-    def is_from_env(self) -> bool:
-        """Is :py:attr:`source_loc` denotes environment variable name"""
-        return not isinstance(self.source_loc, TextLocation)
-
-    @classmethod
-    def from_error_wrapper(
-        cls,
-        err_wrapper: ErrorWrapper,
-        *,
-        source_loc: Union[FlatMapLocation, TextLocation] = None,
-    ) -> 'ExtendedErrorWrapper':
-        """
-        Alternative constructor trying to make copying faster
-        """
-        ext_wrappper = object.__new__(cls)
-        for attr in err_wrapper.__slots__:
-            setattr(ext_wrappper, attr, getattr(err_wrapper, attr))
-        ext_wrappper.source_loc = source_loc
-        return ext_wrappper
-
-    def dict(self, *, loc_prefix: Optional[Tuple[str, ...]] = None) -> Dict[str, Any]:
-        d = super().dict(loc_prefix=loc_prefix)
-        d.update({'source_loc': self.source_loc, 'is_from_env': self.is_from_env})
-        return d
+    def __repr_args__(self) -> Sequence[Tuple[Optional[str], Any]]:
+        return list(super().__repr_args__()) + [('source_loc', self.source_loc)]
 
 
 def _flatten_errors_wrappers(
-    errors: Sequence[Any], *, loc: Optional[Sequence[Union[str, int]]] = None
-) -> Iterator[ErrorWrapper]:
+    errors: Sequence[Any], *, loc: Optional[ModelLoc] = None
+) -> Iterator[Tuple[ModelLoc, ErrorWrapper]]:
     """
     Iterate through ValidationError error wrappers reducing nesting
     """
@@ -224,14 +147,11 @@ def _flatten_errors_wrappers(
         loc = ()
     for error in errors:
         if isinstance(error, ErrorWrapper):
-            error_loc = tuple(loc) + error.loc
+            error_loc = tuple(loc) + error.loc_tuple()
             if isinstance(error.exc, ValidationError):
                 yield from _flatten_errors_wrappers(error.exc.raw_errors, loc=error_loc)
             else:
-                error.loc = error_loc
-                yield error
-        elif isinstance(error, list):
-            yield from _flatten_errors_wrappers(error)
+                yield error_loc, error
         else:
             raise RuntimeError(f'Unknown error object: {error}')
 
@@ -239,21 +159,128 @@ def _flatten_errors_wrappers(
 def with_errs_locations(
     model: Type[BaseModel],
     validation_err: ValidationError,
-    values_source: SourceLocationProvider[Union[FlatMapLocation, TextLocation]],
+    values_source: AnySourceLocProvider,
 ) -> ValidationError:
-    err_wrappers: List[ErrorWrapper] = []
-    for raw_err in _flatten_errors_wrappers(validation_err.raw_errors):
+    def process_err_wrapper(
+        err_wrapper: ErrorWrapper, loc_override: ModelLoc
+    ) -> ErrorWrapper:
         try:
-            location = values_source.get_location(raw_err.loc)
-            if isinstance(raw_err, ExtendedErrorWrapper):
-                raw_err.source_loc = location
-            else:
-                raw_err = ExtendedErrorWrapper.from_error_wrapper(
-                    raw_err, source_loc=location
-                )
+            location = values_source.get_location(loc_override)
         except KeyError:
-            pass
+            if isinstance(err_wrapper, ExtendedErrorWrapper):
+                return ExtendedErrorWrapper(
+                    err_wrapper.exc, loc_override, err_wrapper.source_loc
+                )
+            else:
+                return ErrorWrapper(err_wrapper.exc, tuple(loc_override))
 
-        err_wrappers.append(raw_err)
+        return ExtendedErrorWrapper(err_wrapper.exc, loc_override, source_loc=location)
 
-    return ValidationError(err_wrappers, model)
+    return ValidationError(
+        [
+            process_err_wrapper(raw_err, model_loc)
+            for model_loc, raw_err in _flatten_errors_wrappers(
+                validation_err.raw_errors
+            )
+        ],
+        model,
+    )
+
+
+def serialize_errors(err: ValidationError, config: Type[BaseConfig]) -> List[Json]:
+    return [_ext_error_dict(err_wrapper, config) for err_wrapper in err.raw_errors]
+
+
+def render_validation_error(error: LoadingValidationError) -> str:
+    if issubclass(error.model, BaseModel):
+        config = error.model.__config__
+    else:
+        config = error.model.__pydantic_model__.__config__
+
+    errors = list(_flatten_errors_wrappers(error.raw_errors))
+    errors_num = len(errors)
+
+    rendered_errors = '\n'.join(
+        _render_raw_error(raw_err, model_loc, config) for model_loc, raw_err in errors
+    )
+    env_used = any(
+        not isinstance(raw_err.source_loc, TextLocation)
+        for _, raw_err in errors
+        if isinstance(raw_err, ExtendedErrorWrapper)
+    )
+
+    return (
+        f'{errors_num} validation error{"" if errors_num == 1 else "s"} '
+        f'for {error.model.__name__} '
+        f'({_render_err_file_path(error.file_path)}'
+        f"{' and environment variables' if env_used else ''}"
+        f'):\n{rendered_errors}'
+    )
+
+
+def _render_err_file_path(file_path: Path) -> str:
+    if file_path is not None:
+        return f'configuration file at "{file_path}"'
+    else:
+        return 'in-memory buffer'
+
+
+def _render_raw_error(
+    raw_err: ErrorWrapper, loc_override: ModelLoc, config: Type[BaseConfig]
+) -> str:
+    serialized_err = cast(
+        JsonDict, error_dict(raw_err.exc, config, tuple(loc_override))
+    )
+    return (
+        f'{_render_err_loc(raw_err, loc_override)}\n'
+        f'  {serialized_err["msg"]} ({_render_error_type_and_ctx(serialized_err)})'
+    )
+
+
+def _render_error_type_and_ctx(error: JsonDict) -> str:
+    t = 'type=' + error['type']
+    ctx = cast(JsonDict, error.get('ctx'))
+    if ctx:
+        return t + ''.join(f'; {k}={v}' for k, v in ctx.items())
+    else:
+        return t
+
+
+def _render_err_loc(raw_err: ErrorWrapper, loc_override: ModelLoc) -> str:
+    model_loc = ' -> '.join(str(loc) for loc in loc_override)
+    if isinstance(raw_err, ExtendedErrorWrapper):
+        if not isinstance(raw_err.source_loc, TextLocation):
+            env_name, text_loc = raw_err.source_loc
+            from_loc = f' from env "{env_name}"'
+            if text_loc is not None:
+                from_loc += f' at {text_loc.pos}:{text_loc.end_pos}'
+        else:
+            from_loc = (
+                f' from file at {raw_err.source_loc.line}:{raw_err.source_loc.col}'
+            )
+
+        return model_loc + from_loc
+
+    return model_loc
+
+
+def _serialize_source_loc(loc: AnySourceLoc) -> Json:
+    if isinstance(loc, TextLocation):
+        return asdict(loc)
+
+    assert (
+        isinstance(loc, Sequence)
+        and len(loc) == 2
+        and (loc[1] is None or isinstance(loc[1], TextLocation))
+    )
+
+    env_name, text_loc = loc
+    return [env_name, asdict(text_loc) if text_loc is not None else None]
+
+
+def _ext_error_dict(err_wrapper: ErrorWrapper, config: Type[BaseConfig]) -> JsonDict:
+    res = cast(JsonDict, error_dict(err_wrapper.exc, config, err_wrapper.loc_tuple()))
+    if isinstance(err_wrapper, ExtendedErrorWrapper):
+        res['source_loc'] = _serialize_source_loc(err_wrapper.source_loc)
+
+    return res

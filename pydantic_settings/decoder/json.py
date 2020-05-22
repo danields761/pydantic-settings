@@ -7,9 +7,8 @@ from typing import Tuple, Callable, Any, List, Union, TextIO, Dict
 
 from attr import dataclass
 
-from pydantic_settings.types import Json, ModelLocation
+from pydantic_settings.types import Json, ModelLoc, TextLocation
 from .common import (
-    TextLocation,
     LocationLookupError,
     MappingExpectError,
     ListExpectError,
@@ -171,7 +170,7 @@ class _LocationFinder:
     def __init__(self, root_item: ASTItem):
         self.root_item = root_item
 
-    def get_location(self, key: ModelLocation) -> TextLocation:
+    def get_location(self, key: ModelLoc) -> TextLocation:
         try:
             return self._get_location(key)
         except LocationLookupError as err:
@@ -179,7 +178,7 @@ class _LocationFinder:
             # with more specific error, so it might be helpful during debugging
             raise KeyError(key) from err
 
-    def _get_location(self, key: ModelLocation) -> TextLocation:
+    def _get_location(self, key: ModelLoc) -> TextLocation:
         curr_item = self.root_item
         for i, key_part in enumerate(key):
             if isinstance(key_part, int) and not isinstance(curr_item.value, list):

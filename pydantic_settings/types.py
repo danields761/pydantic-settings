@@ -10,13 +10,16 @@ from typing import (
     TypeVar,
     Iterator,
     Callable,
+    Tuple,
+    Optional,
 )
 
+from attr import dataclass
 from pydantic import BaseModel
-from typing_extensions import Protocol, runtime_checkable
+from typing_extensions import Protocol
 
 
-Json = Union[float, int, str, Dict[str, Any], List[Any]]
+Json = Union[float, int, str, 'JsonDict', 'JsonList']
 JsonDict = Dict[str, Json]
 JsonList = List[Json]
 
@@ -50,20 +53,44 @@ def is_pydantic_dataclass(cls: Type) -> bool:
     return hasattr(cls, '__pydantic_model__')
 
 
-ModelLocation = Sequence[Union[str, int]]
+ModelLoc = Sequence[Union[str, int]]
 """
 Location of a value inside a :py:obj:`JsonDict`, used to describe model input locations
 """
 
 
-SourceLocation = TypeVar('SourceLocation', contravariant=True)
-
-
-class SourceLocationProvider(Protocol[SourceLocation]):
+@dataclass
+class TextLocation:
     """
-    Generic protocol for an object able to describe model field location inside
-    a source corresponding to type of :py:obj:`SourceLocation`.
+    Describes symbol occurrence inside a text
     """
 
-    def get_location(self, val_loc: ModelLocation) -> SourceLocation:
+    line: int
+    col: int
+    end_line: int
+    end_col: int
+
+    pos: int
+    end_pos: int
+
+
+FlatMapLoc = Tuple[str, Optional[TextLocation]]
+AnySourceLoc = Union[FlatMapLoc, TextLocation]
+
+
+SourceLocT = TypeVar('SourceLocT', contravariant=True)
+
+
+class SourceLocProvider(Protocol[SourceLocT]):
+    """
+    Aimed to describe location of a model field inside some source. Generic
+    type variable `SourceLocT` will correspond to the type of a source.
+    """
+
+    def get_location(self, val_loc: ModelLoc) -> SourceLocT:
         raise NotImplementedError
+
+
+AnySourceLocProvider = Union[
+    SourceLocProvider[FlatMapLoc], SourceLocProvider[TextLocation]
+]

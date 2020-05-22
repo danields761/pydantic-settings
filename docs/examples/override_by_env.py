@@ -19,5 +19,5 @@ assert load_settings(
     '{}',
     load_env=True,
     type_hint='json',
-    _environ={'FOO_COMPONENT_VAL': 'SOME VALUE'}
+    environ={'FOO_COMPONENT_VAL': 'SOME VALUE'}
 ).component.val == 'SOME VALUE'

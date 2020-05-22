@@ -1,7 +1,7 @@
 from .base import BaseSettingsModel
 from .load import load_settings
 from .errors import LoadingError, LoadingParseError, LoadingValidationError
-from .decoder import TextLocation
+from .types import TextLocation
 from .attrs_docs import with_attrs_docs
 
 

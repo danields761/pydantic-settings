@@ -28,7 +28,7 @@ pyyaml = "^5.1.2"
 tomlkit = "^0.5.5"
 typing-extensions = "^3.7.4"
 attrs = "^19.1"
-class-doc = "^0.1.1"
+class-doc = "0.2.0b"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.0.1"
