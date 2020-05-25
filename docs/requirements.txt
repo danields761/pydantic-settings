@@ -2,4 +2,5 @@ sphinx==2.2.0
 toml
 sphinx-autoapi
 sphinx_rtd_theme
-m2d
+m2r
+sphinx-rst-builder
