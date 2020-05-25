@@ -148,7 +148,11 @@ def load_settings(
         # TODO: ignore env vars restoration errors so far
         restorer = _get_shape_restorer(cls, env_prefix)
         env_values, _ = restorer.restore(environ or os_environ)
-        document_content = deep_merge_mappings(env_values, document_content)
+
+        if document_content is not None:
+            document_content = deep_merge_mappings(env_values, document_content)
+        else:
+            document_content = env_values
 
     try:
         result = cls(**document_content)

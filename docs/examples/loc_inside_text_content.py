@@ -8,18 +8,13 @@ class Foo(BaseSettingsModel):
 
 
 try:
-    load_settings(
-        Foo, '{"val": "NOT AN INT"}'
-    )
+    load_settings(Foo, '{"val": "NOT AN INT"}', type_hint='json')
 except ValidationError as e:
     err_wrapper, *_ = e.raw_errors
     assert isinstance(err_wrapper, ExtendedErrorWrapper)
     assert isinstance(err_wrapper.exc, IntegerError)
     assert err_wrapper.source_loc == TextLocation(
-        1,  # starts from line
-        9,  # starts from column
-        1,  # ends on line
-        20,  # ends on column
-        8,  # begin index
-        19  # end index
+        line=1, col=9, end_line=1, end_col=21, pos=9, end_pos=20
     )
+else:
+    raise Exception('must rise error')

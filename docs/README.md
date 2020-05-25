@@ -3,11 +3,16 @@
 
 
 # Pydantic settings
+
 > Hipster-orgazmic tool to mange application settings
 
+ 
 [![Build Status](https://travis-ci.com/danields761/pydantic-settings.svg?branch=master)](https://travis-ci.com/danields761/pydantic-settings)
+
 [![PyPI version](https://badge.fury.io/py/pydantic-settings.svg)](https://badge.fury.io/py/pydantic-settings)
+
 [![Documentation Status](https://readthedocs.org/projects/pydantic-settings/badge/?version=latest)](https://pydantic-settings.readthedocs.io/en/latest/?badge=latest)
+
 
 Library which extends [pydantic](https://github.com/samuelcolvin/pydantic) functionality in scope of application settings. *Pydantic* already have settings
 implementation, e.g. `pydantic.BaseSettings`, but from my point it's missing some useful features:

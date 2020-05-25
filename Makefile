@@ -13,8 +13,8 @@ docs:
 	@$(command_prefix) sphinx-build docs docs/build
 
 readme:
-	@$(command_prefix) sphinx-build -M markdown docs docs/build
-	@cp docs/build/markdown/README.md .
+	@$(command_prefix) sphinx-build -M rst docs docs/build
+	@cp docs/build/rst/README.rst .
 
 	@echo
-	@echo Generated README.md copied to the project root
+	@echo Generated README.rst has been copied to the project root

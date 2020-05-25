@@ -13,10 +13,13 @@ class AppSettings(BaseSettingsModel):
     component: ComponentOptions
 
 
-assert load_settings(
-    AppSettings,
-    '{}',
-    load_env=True,
-    type_hint='json',
-    environ={'FOO_COMPONENT_VAL': 'SOME VALUE'}
-).component.val == 'SOME VALUE'
+assert (
+    load_settings(
+        AppSettings,
+        '{}',
+        load_env=True,
+        type_hint='json',
+        environ={'FOO_COMPONENT_VAL': 'SOME VALUE'},
+    ).component.val
+    == 'SOME VALUE'
+)

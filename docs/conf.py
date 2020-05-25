@@ -4,10 +4,9 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-# -- Path setup --------------------------------------------------------------
-
-from datetime import datetime
+import sys
 from pathlib import Path
+from datetime import datetime
 from packaging.version import Version
 import toml
 
@@ -27,7 +26,7 @@ version = Version(release).base_version if release else ''
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['autoapi.extension', 'm2r']
+extensions = ['autoapi.extension', 'm2r', 'sphinx_rst_builder']
 source_suffix = ['.rst', '.md']
 
 
@@ -57,3 +56,8 @@ html_theme_options = {'display_version': True, 'collapse_navigation': True}
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+
+def setup(app):
+    from docs.rst_builder_ext import CustomBuilder
+    app.registry.builders['rst'] = CustomBuilder

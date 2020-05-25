@@ -2,7 +2,7 @@
 name = "pydantic-settings"
 version = "0.2.0"
 description = "Hipster-orgazmic tool to mange application settings"
-readme = "README.md"
+readme = "README.rst"
 authors = ["Daniel Daniels <danields761@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/danields761/pydantic-settings"
@@ -37,14 +37,12 @@ black = "^19.3b0"
 pytest-clarity = "^0.2.0-alpha.1"
 sphinx = "^2.2.0"
 sphinx-autoapi = "^1.1.0"
-recommonmark = "^0.6.0"
 m2r = "^0.2.1"
-sphinx-markdown-builder = "^0.5.4"
 
 [tool.black]
 # UEAH thats works
 skip_string_normalization = true
-exclude = "(docs/examples/*)|(\\.?venv)"
+exclude = "(\\.?venv)"
 
 [build-system]
 requires = ["poetry>=0.12"]
