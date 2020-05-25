@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-
 from pydantic_settings import BaseSettingsModel, load_settings
 
 

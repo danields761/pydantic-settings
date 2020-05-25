@@ -1,7 +1,7 @@
 Pydantic Settings documentation (|version|)
 ===========================================
 
-A set of tools helping to work with and manage application settings
+A set of tools helping to manage and work with application settings
 
 Getting Started
 +++++++++++++++
@@ -25,94 +25,52 @@ Override settings values by env variables even for nested fields
     :language: python
 
 It's not necessary to override :py:class:`.BaseSettingsModel` in
-order to use :py:func:`.load_settings` functionality, it also works with plain
-:py:class:`pydantic.BaseModels` subclasses, probably, you need specify
-:py:obj:`~.load_settings.env_prefix` to override default :code:`"APP"` prefix.
+order to use :py:func:`.load_settings` functionality. It also works with plain
+:py:class:`pydantic.BaseModels` subclasses. Specify :py:obj:`~.load_settings.env_prefix`
+in order to override default :code:`"APP"` prefix.
 
-.. code-block:: python
-
-    class Foo(BaseModel):
-        val: int
-
-    assert load_settings(
-        Foo, load_env=True, env_prefix='EX', _environ={'EX_VAL': 10}
-    ).val == 10
+.. literalinclude:: examples/load_env_prefix.py
+    :language: python
 
 
 Rich location specifiers
 ------------------------
 
 Also :py:func:`.load_settings` provides rich information about location
-of an bad value inside the source.
+of a wrong value inside the source.
 
 Location inside text content
 ............................
 
-.. code-block:: python
+.. literalinclude:: examples/loc_inside_text_content.py
+    :language: python
 
-    class Foo(BaseModel):
-        val: int
-
-    try:
-        load_settings(
-            Foo, '{"val": "NOT AN INT"}'
-        )
-    except ValidationError as e:
-        assert isinstance(e.raw_errors[0].exc, IntegerError)
-        assert e.raw_errors[0].source_location = FileLocation(
-            1,   # starts from line
-            9,   # starts from column
-            1,   # ends on line
-            20,  # ends on column
-            8,   # begin index
-            19   # end index
-        )
 
 Location among environment variables
 ....................................
 
 Also saves exact env variable name
 
-.. code-block:: python
-
-    class Foo(BaseModel):
-        val: int
-
-
-    try:
-        load_settings(
-            Foo, load_env=True, _environ={'APP_val': 'NOT AN INT'}
-        )
-    except ValidationError as e:
-        assert isinstance(e.raw_errors[0].exc, IntegerError)
-        assert e.raw_errors[0].source_location == 'APP_val'
+.. literalinclude:: examples/env_var_exact_loc.py
+    :language: python
 
 
 Extract attributes docstrings
 -----------------------------
 
-By default, *pydantic* offers very verbose way for documenting fields, e.g.
+By default, *pydantic* offers very verbose way of documenting fields, e.g.
 
 .. code-block:: python
 
     class Foo(BaseModel):
-        val: int = Field(0, description='some valuable field description')
+        val: int = Schema(0, description='some valuable field description')
 
-That verbosity may be avoided by extracting documentation from so called *attributes
+That verbosity may be avoided by extracting documentation from so called *attribute
 docstring*, which is, for reference, also supported by *sphinx-autodoc*
 (also there is very old rejected :pep:`224`, which proposes it), example:
 
-.. code-block:: python
-
-    @with_attrs_docs
-    class Foo(BaseModel):
-        val: int
-        """some valuable field description"""
-
-    assert (
-        Foo.__fields__['val'].schema.description
-        == 'some valuable field description'
-    )
+.. literalinclude:: examples/attr_docs_example.py
+    :language: python
 
 :py:class:`.BaseSettingsModel` does it automatically.
 
@@ -121,20 +79,11 @@ docstring*, which is, for reference, also supported by *sphinx-autodoc*
     really unclear to which of definitions the docstring should belongs
 
 
-Known limitations/Bugs
-----------------------
-
-* There is no way to address model value inside a sequence by environment variable
-* If you are settings *json* string as some nested namespace value via
-  environment variable, and any value inside it will not pass validation,
-  value of :py:obj:`~.ExtendedErrorWrapper.source_location` will be wrong.
-
-
 API Reference
 -------------
 
 Also there is :doc:`API Reference <autoapi/pydantic_settings/index>`.
-It's dirty, but still may provide helpful info.
+It's a bit dirty, but still may provide helpful info.
 
 Indices and tables
 ==================

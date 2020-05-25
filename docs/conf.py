@@ -6,24 +6,18 @@
 
 # -- Path setup --------------------------------------------------------------
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+from datetime import datetime
 from pathlib import Path
 from packaging.version import Version
 import toml
 
-# -- Project information -----------------------------------------------------
 
+# -- Project information -----------------------------------------------------
 proj_meta = toml.load(Path(__file__).parents[1] / 'pyproject.toml')['tool']['poetry']
 
 author = ', '.join(proj_meta['authors'])
 project = 'Pydantic Settings'
-copyright = f'2019, {author}'
+copyright = f'{datetime.now()}, {author}'
 release = proj_meta['version']
 version = Version(release).base_version if release else ''
 
@@ -33,7 +27,7 @@ version = Version(release).base_version if release else ''
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['autoapi.extension']
+extensions = ['autoapi.extension', 'm2r']
 source_suffix = ['.rst', '.md']
 
 

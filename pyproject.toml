@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-settings"
-version = "0.1.2b"
+version = "0.2.0"
 description = "Hipster-orgazmic tool to mange application settings"
 readme = "README.md"
 authors = ["Daniel Daniels <danields761@gmail.com>"]
@@ -29,16 +29,17 @@ tomlkit = "^0.5.5"
 typing-extensions = "^3.7.4"
 attrs = "^19.1"
 class-doc = "0.2.0b"
+sphinx_rtd_theme = "^0.4.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.0.1"
 black = "^19.3b0"
 pytest-clarity = "^0.2.0-alpha.1"
 sphinx = "^2.2.0"
-sphinxcontrib-golangdomain = "^0.2.0-alpha.0"
 sphinx-autoapi = "^1.1.0"
 recommonmark = "^0.6.0"
 m2r = "^0.2.1"
+sphinx-markdown-builder = "^0.5.4"
 
 [tool.black]
 # UEAH thats works

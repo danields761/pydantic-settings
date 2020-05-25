@@ -31,7 +31,7 @@ from pydantic_settings.types import (
 class LoadingError(ValueError):
     """
     Indicates that configuration file couldn't be loaded for some reason, which is
-    described by error causer, human-readable message or set of another errors
+    described by error causer or human-readable message
     """
 
     file_path: Optional[Path]
