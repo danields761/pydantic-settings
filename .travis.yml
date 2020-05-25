@@ -1,17 +1,16 @@
 language: python
-cache: pip
+cache:
+  directories:
+    - .venv
 
 python:
   - "3.6"
   - "3.7"
-  - "3.8-dev"
+  - "3.8"
 install:
   - pip install poetry
-  - poetry install
+  - poetry config virtualenvs.in-project true
+  - ls .venv/bin/python &> /dev/null || poetry install
 
 script:
   - poetry run pytest .
-
-jobs:
-  allow_failures:
-  - python: '3.8-dev'
