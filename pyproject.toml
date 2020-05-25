@@ -29,7 +29,6 @@ tomlkit = "^0.5.5"
 typing-extensions = "^3.7.4"
 attrs = "^19.1"
 class-doc = "0.2.0b"
-sphinx_rtd_theme = "^0.4.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.0.1"
@@ -38,6 +37,8 @@ pytest-clarity = "^0.2.0-alpha.1"
 sphinx = "^2.2.0"
 sphinx-autoapi = "^1.1.0"
 m2r = "^0.2.1"
+sphinx_rtd_theme = "^0.4.3"
+sphinx-rst-builder = "^0.0.3"
 
 [tool.black]
 # UEAH thats works
