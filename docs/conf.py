@@ -16,7 +16,7 @@ proj_meta = toml.load(Path(__file__).parents[1] / 'pyproject.toml')['tool']['poe
 
 author = ', '.join(proj_meta['authors'])
 project = 'Pydantic Settings'
-copyright = f'{datetime.now()}, {author}'
+copyright = f'{datetime.now().year}, {author}'
 release = proj_meta['version']
 version = Version(release).base_version if release else ''
 
@@ -59,5 +59,8 @@ html_static_path = ['_static']
 
 
 def setup(app):
+    sys.path.append(str(Path(__file__).parents[1]))
+
     from docs.rst_builder_ext import CustomBuilder
     app.registry.builders['rst'] = CustomBuilder
+
