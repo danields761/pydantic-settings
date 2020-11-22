@@ -2,22 +2,31 @@ import json
 from io import StringIO
 from os import environ as os_environ
 from pathlib import Path
-from typing import Type, TextIO, Optional, Union, Mapping, Tuple, TypeVar, Callable
+from typing import (
+    Callable,
+    Mapping,
+    Optional,
+    TextIO,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from pydantic import BaseModel, ValidationError
 
 from pydantic_settings.base import BaseSettingsModel
 from pydantic_settings.decoder import (
-    get_decoder,
     DecoderMeta,
+    DecoderNotFoundError,
     ParsingError,
     TextValues,
-    DecoderNotFoundError,
+    get_decoder,
 )
 from pydantic_settings.errors import (
     LoadingError,
-    LoadingValidationError,
     LoadingParseError,
+    LoadingValidationError,
     with_errs_locations,
 )
 from pydantic_settings.restorer import FlatMapValues, ModelShapeRestorer
@@ -50,7 +59,8 @@ def _resolve_content_arg(
                 raise LoadingError(
                     file_path,
                     err,
-                    f'cannot determine decoder from file suffix "{file_path.suffix}"',
+                    f'cannot determine decoder from'
+                    f'file suffix "{file_path.suffix}"',
                 )
 
             return decoder_by_type_hint(file_path), file_path, content
@@ -74,7 +84,9 @@ def _resolve_content_arg(
         return decoder_by_type_hint(), None, content
 
 
-def _get_shape_restorer(cls: Type[BaseModel], env_prefix: str) -> ModelShapeRestorer:
+def _get_shape_restorer(
+    cls: Type[BaseModel], env_prefix: str
+) -> ModelShapeRestorer:
     if issubclass(cls, BaseSettingsModel):
         restorer = cls.shape_restorer
     else:
@@ -97,31 +109,32 @@ def load_settings(
     _content_reader: Callable[[Path], str] = Path.read_text,
 ) -> SettingsM:
     """
-    Load setting from provided content and merge with environment variables.
-    Content may be loaded from file path, from file-like source or from plain text.
+    Load setting from `any_content` and optionally merge with environment
+    variables. Content loaded from file path, from file-like source or from
+    plain text.
 
-    If there is requirement to load settings only from environment variables, then
-    `content` argument may be omitted.
+    You could omit `any_content` argument in case you want to load settings
+    only from environment variables.
 
-    :param cls: either :py:class:`BaseSettingsModel` or :py:class:`pydantic.BaseModel`
-        subclass type. The result will be instance of a given type.
+    :param cls: either :py:class:`BaseSettingsModel` or
+        :py:class:`pydantic.BaseModel` subclass type. The result will be
+        instance of a given type.
     :param any_content: content from which settings will be loaded
-    :param type_hint: determines content decoder. Required, if content isn't provided
-        as a file path (e.g. content isn't instance of `pathlib.Path`). Takes
-        precedence over actual file suffix.
+    :param type_hint: determines content decoder. Required, if content isn't
+        provided as a file path. Takes precedence over actual file suffix.
     :param load_env: determines whether load environment variables or not
-    :param env_prefix: determines prefix used to match model field with appropriate
-        environment variable. *NOTE* if `cls` argument is subclass of
-        :py:class:`BaseSettingsModel` then `env_prefix` argument will be ignored.
-    :param environ: environment variables mapping, in case if this argument is `None`
-        `os.environ` will be used
-
+    :param env_prefix: determines prefix used to match model field with
+        appropriate environment variable. *NOTE* if `cls` argument is
+        subclass of :py:class:`BaseSettingsModel` then `env_prefix`
+        argument will be ignored.
+    :param environ: environment to use instead of `os.environ`.
     :raises LoadingError: in case if any error occurred while loading settings
-
     :return: instance of settings model, provided by `cls` argument
     """
     if any_content is None and not load_env:
-        raise LoadingError(None, msg='no sources provided to load settings from')
+        raise LoadingError(
+            None, msg='no sources provided to load settings from'
+        )
 
     decoder_desc: Optional[DecoderMeta] = None
     file_path: Optional[Path] = None
@@ -136,10 +149,15 @@ def load_settings(
     file_values: Optional[TextValues] = None
     if content is not None:
         try:
-            document_content = file_values = decoder_desc.values_loader(content)
+            document_content = file_values = decoder_desc.values_loader(
+                content
+            )
         except ParsingError as err:
             raise LoadingParseError(
-                file_path, err.cause, location=err.text_location, decoder=decoder_desc
+                file_path,
+                err.cause,
+                location=err.text_location,
+                decoder=decoder_desc,
             )
 
     # prepare environment values
@@ -150,7 +168,9 @@ def load_settings(
         env_values, _ = restorer.restore(environ or os_environ)
 
         if document_content is not None:
-            document_content = deep_merge_mappings(env_values, document_content)
+            document_content = deep_merge_mappings(
+                env_values, document_content
+            )
         else:
             document_content = env_values
 
@@ -165,6 +185,8 @@ def load_settings(
         if env_values is not None:
             new_err = with_errs_locations(cls, new_err, env_values)
 
-        raise LoadingValidationError(new_err.raw_errors, cls, file_path) from err
+        raise LoadingValidationError(
+            new_err.raw_errors, cls, file_path
+        ) from err
 
     return result

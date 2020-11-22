@@ -1,6 +1,6 @@
 import json
 
-from pydantic import BaseModel, ValidationError, MissingError
+from pydantic import BaseModel, MissingError, ValidationError
 from pytest import raises
 
 from pydantic_settings.base import BaseSettingsModel
@@ -54,4 +54,7 @@ def test_settings_model_attrs_docs_created_automatically():
         bar: int
         """bar description"""
 
-    assert SettingsModel.__fields__['bar'].field_info.description == 'bar description'
+    assert (
+        SettingsModel.__fields__['bar'].field_info.description
+        == 'bar description'
+    )

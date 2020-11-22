@@ -12,7 +12,9 @@ import toml
 
 
 # -- Project information -----------------------------------------------------
-proj_meta = toml.load(Path(__file__).parents[1] / 'pyproject.toml')['tool']['poetry']
+proj_meta = toml.load(Path(__file__).parents[1] / 'pyproject.toml')['tool'][
+    'poetry'
+]
 
 author = ', '.join(proj_meta['authors'])
 project = 'Pydantic Settings'
@@ -62,5 +64,5 @@ def setup(app):
     sys.path.append(str(Path(__file__).parents[1]))
 
     from docs.rst_builder_ext import CustomBuilder
-    app.registry.builders['rst'] = CustomBuilder
 
+    app.registry.builders['rst'] = CustomBuilder

@@ -1,18 +1,17 @@
 import tempfile
 from io import StringIO
 from pathlib import Path
-from textwrap import dedent
 from typing import List
 
-from pydantic import IntegerError, FloatError, StrError
+from pydantic import FloatError, IntegerError, StrError
 from pytest import mark, raises
 
 from pydantic_settings import (
     BaseSettingsModel,
     LoadingError,
-    load_settings,
-    TextLocation,
     LoadingValidationError,
+    TextLocation,
+    load_settings,
 )
 from pydantic_settings.errors import ExtendedErrorWrapper
 
@@ -22,12 +21,6 @@ def per_location_errors(load_err):
         (raw_err.source_loc, raw_err.exc)
         for raw_err in load_err.raw_errors
         if isinstance(raw_err, ExtendedErrorWrapper)
-    )
-
-
-def dedent_test_str(test_str):
-    return ' '.join(
-        line.strip() for line in dedent(test_str).split('\n') if len(line) > 0
     )
 
 
@@ -77,7 +70,10 @@ class Settings2(BaseSettingsModel):
         ),
         (
             Settings2,
-            '{"settings_list": [], "settings": {"foo": 100, "bar": "INVALID FLOAT"}, "foo": []}',
+            (
+                '{"settings_list": [], "settings": '
+                '{"foo": 100, "bar": "INVALID FLOAT"}, "foo": []}'
+            ),
             {},
             [
                 (TextLocation(1, 55, 1, 70, 55, 69), FloatError),
@@ -98,7 +94,11 @@ class Settings2(BaseSettingsModel):
 def test_validation_errors(model_cls, content, environ, locations):
     with raises(LoadingError) as exc_info:
         load_settings(
-            model_cls, content, type_hint='json', load_env=True, environ=environ
+            model_cls,
+            content,
+            type_hint='json',
+            load_env=True,
+            environ=environ,
         )
 
     assert exc_info.type is LoadingValidationError
@@ -128,29 +128,43 @@ def empty_tmp_file_creator(extension):
             None,
             """LoadingError: Loader ".cfg" isn't supported""",
         ),
-        ('', False, 'ini', """LoadingError: Loader "ini" isn't supported""",),
-        (StringIO(''), False, 'ini', """LoadingError: Loader "ini" isn't supported""",),
+        ('', False, 'ini', """LoadingError: Loader "ini" isn't supported"""),
+        (
+            StringIO(''),
+            False,
+            'ini',
+            """LoadingError: Loader "ini" isn't supported""",
+        ),
         (
             StringIO(''),
             False,
             None,
-            dedent_test_str(
-                """
-                LoadingError: "type_hint" argument is required if content is not an
-                instance of "pathlib.Path" class
-                """
+            (
+                'LoadingError: "type_hint" argument is '
+                'required if content is not an '
+                'instance of "pathlib.Path" class'
             ),
         ),
         (
             Path('/not/exists.cfg'),
             False,
             'DEFINITELY NOT A TYPE HINT',
-            """LoadingError: Loader "DEFINITELY NOT A TYPE HINT" isn't supported""",
+            (
+                'LoadingError: Loader "DEFINITELY NOT A TYPE HINT" '
+                "isn't supported"
+            ),
         ),
-        (None, False, None, 'LoadingError: no sources provided to load settings from'),
+        (
+            None,
+            False,
+            None,
+            'LoadingError: no sources provided to load settings from',
+        ),
     ],
 )
-def test_load_settings_general_errors(any_content, load_env, type_hint, expect_err_msg):
+def test_load_settings_general_errors(
+    any_content, load_env, type_hint, expect_err_msg
+):
     if callable(any_content):
         any_content = any_content()
 

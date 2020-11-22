@@ -1,43 +1,42 @@
 from dataclasses import Field
 from typing import (
-    Dict,
-    Union,
-    List,
     Any,
-    ClassVar,
-    Type,
-    Sequence,
-    TypeVar,
-    Iterator,
     Callable,
-    Tuple,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
     Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
 from attr import dataclass
 from pydantic import BaseModel
-from typing_extensions import Protocol
-
+from typing_extensions import Protocol, runtime_checkable
 
 Json = Union[float, int, str, 'JsonDict', 'JsonList']
 JsonDict = Dict[str, Json]
 JsonList = List[Json]
 
 
+@runtime_checkable
 class DataclassProtocol(Protocol):
     __dataclass_fields__: ClassVar[Dict[str, Field]]
 
 
-class AttrsProtocol(Protocol):
-    __attrs_attrs__: ClassVar[Dict[str, Any]]
-
-
+@runtime_checkable
 class PydanticDataclass(DataclassProtocol, Protocol):
     __initialised__: bool
     __pydantic_model__: ClassVar[BaseModel]
 
     @classmethod
-    def __validate__(cls: Type['PydanticDataclass'], value: Any) -> 'PydanticDataclass':
+    def __validate__(
+        cls: Type['PydanticDataclass'], value: Any
+    ) -> 'PydanticDataclass':
         raise NotImplementedError
 
     @classmethod
@@ -46,23 +45,24 @@ class PydanticDataclass(DataclassProtocol, Protocol):
 
 
 AnyPydanticModel = Type[Union[BaseModel, PydanticDataclass]]
-AnyModelType = Type[Union[BaseModel, DataclassProtocol, AttrsProtocol]]
+AnyModelType = Type[Union[BaseModel, DataclassProtocol]]
 
 
 def is_pydantic_dataclass(cls: Type) -> bool:
-    return hasattr(cls, '__pydantic_model__')
+    return isinstance(cls, PydanticDataclass)
 
 
-ModelLoc = Sequence[Union[str, int]]
+JsonLocation = Sequence[Union[str, int]]
 """
-Location of a value inside a :py:obj:`JsonDict`, used to describe model input locations
+Sequence of indexes or keys, represents a path to reach the value inside some
+:py:obj:`JsonDict`.
 """
 
 
 @dataclass
 class TextLocation:
     """
-    Describes symbol occurrence inside a text
+    Describes value occurrence inside a text.
     """
 
     line: int
@@ -74,23 +74,23 @@ class TextLocation:
     end_pos: int
 
 
-FlatMapLoc = Tuple[str, Optional[TextLocation]]
-AnySourceLoc = Union[FlatMapLoc, TextLocation]
+FlatMapLocation = Tuple[str, Optional[TextLocation]]
+AnySourceLocation = Union[FlatMapLocation, TextLocation]
 
 
-SourceLocT = TypeVar('SourceLocT', contravariant=True)
+SL = TypeVar('SL', contravariant=True)
 
 
-class SourceLocProvider(Protocol[SourceLocT]):
+class SourceValueLocationProvider(Protocol[SL]):
     """
-    Aimed to describe location of a model field inside some source. Generic
-    type variable `SourceLocT` will correspond to the type of a source.
+    Describes location of a value inside the source.
     """
 
-    def get_location(self, val_loc: ModelLoc) -> SourceLocT:
+    def get_location(self, val_loc: JsonLocation) -> SL:
         raise NotImplementedError
 
 
 AnySourceLocProvider = Union[
-    SourceLocProvider[FlatMapLoc], SourceLocProvider[TextLocation]
+    SourceValueLocationProvider[FlatMapLocation],
+    SourceValueLocationProvider[TextLocation],
 ]

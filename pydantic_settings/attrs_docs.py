@@ -1,23 +1,16 @@
-import ast
-import inspect
-import textwrap
-from typing import Dict, Type, Optional
+from typing import Callable, Optional, Type, TypeVar, Union, overload
 
 from class_doc import extract_docs_from_cls_obj
 
-from pydantic_settings.types import (
-    AnyPydanticModel,
-    PydanticDataclass,
-    is_pydantic_dataclass,
-)
+from pydantic_settings.types import AnyPydanticModel, is_pydantic_dataclass
 
 
 def apply_attributes_docs(
     model: Type[AnyPydanticModel], *, override_existing: bool = True
-):
+) -> None:
     """
-    Apply model attributes documentation in-place. Resulted docs may be found inside
-    :code:`field.schema.description` for *pydantic* model field
+    Apply model attributes documentation in-place. Resulted docs are placed
+    inside :code:`field.schema.description` for *pydantic* model field.
 
     :param model: any pydantic model
     :param override_existing: override existing descriptions
@@ -40,15 +33,33 @@ def apply_attributes_docs(
             pass
 
 
+MC = TypeVar('MC', bound=AnyPydanticModel)
+_MC = TypeVar('_MC', bound=AnyPydanticModel)
+
+
+@overload
+def with_attrs_docs(model_cls: Type[MC]) -> Type[MC]:
+    ...
+
+
+@overload
 def with_attrs_docs(
-    model_cls: Optional[AnyPydanticModel] = None, *, override_existed: bool = True
-):
+    *, override_existing: bool = True
+) -> Callable[[Type[MC]], Type[MC]]:
+    ...
+
+
+def with_attrs_docs(
+    model_cls: Optional[Type[MC]] = None, *, override_existing: bool = True
+) -> Union[Callable[[Type[MC]], Type[MC]], Type[MC]]:
     """
-    Decorator which applies :py:func:`.apply_attributes_docs`
+    Applies :py:func:`.apply_attributes_docs`.
     """
 
-    def decorator(maybe_model_cls: AnyPydanticModel):
-        apply_attributes_docs(maybe_model_cls, override_existing=override_existed)
+    def decorator(maybe_model_cls: Type[_MC]) -> Type[_MC]:
+        apply_attributes_docs(
+            maybe_model_cls, override_existing=override_existing
+        )
         return maybe_model_cls
 
     if model_cls is None:

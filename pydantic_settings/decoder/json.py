@@ -1,19 +1,19 @@
+import copy
 import json
 import json.scanner
-import copy
 from functools import partial, wraps
-
-from typing import Tuple, Callable, Any, List, Union, TextIO, Dict
+from typing import Any, Callable, Dict, List, TextIO, Tuple, Union
 
 from attr import dataclass
 
-from pydantic_settings.types import Json, ModelLoc, TextLocation
+from pydantic_settings.types import Json, JsonLocation, TextLocation
+
 from .common import (
+    ListExpectError,
     LocationLookupError,
     MappingExpectError,
-    ListExpectError,
-    TextValues,
     ParsingError,
+    TextValues,
 )
 
 
@@ -68,14 +68,18 @@ class ASTItem:
         end_pos: int = None,
     ) -> 'ASTItem':
         return ASTItem(
-            TextLocation(line, col, end_line, end_col, pos or 0, end_pos or 0), val
+            TextLocation(line, col, end_line, end_col, pos or 0, end_pos or 0),
+            val,
         )
 
     def get_json_value(self) -> Json:
         if isinstance(self.value, list):
             return [child.get_json_value() for child in self.value]
         if isinstance(self.value, dict):
-            return {key: child.get_json_value() for key, child in self.value.items()}
+            return {
+                key: child.get_json_value()
+                for key, child in self.value.items()
+            }
         return self.value
 
 
@@ -99,10 +103,14 @@ def _create_scanner_wrapper(
         is_supported = val is None or isinstance(val, (int, float, bool))
         if not is_supported:
             raise ValueError(
-                f'unexpected value has been returned from scanner: "{val}" of type {type(val)}'
+                f'unexpected value has been returned from scanner: '
+                f'"{val}" of type {type(val)}'
             )
 
-        return ASTItem(TextLocation(line, col, line, end_col, idx, end), val), end
+        return (
+            ASTItem(TextLocation(line, col, line, end_col, idx, end), val),
+            end,
+        )
 
     return wrapper
 
@@ -118,13 +126,14 @@ class ASTDecoder(json.JSONDecoder):
         str_parser_wrapper = _create_object_hook(
             lambda s_with_end, strict: scanstring(*s_with_end, strict)
         )
-        self.parse_string = lambda s, end, strict: str_parser_wrapper((s, end), strict)
+        self.parse_string = lambda s, end, strict: str_parser_wrapper(
+            (s, end), strict
+        )
 
-        # Here i'am patching scanner closure, because it's internally refers for
+        # Here i'am patching scanner closure, because it's internally refers to
         # itself and it is't configurable.
-        # Schema is: 'py_make_scanner' defines '_scan_once', which is referred by
-        # 'scan_once' which is result of 'py_make_scanner()' expression.
-        # Also copy scanner function here, just in case.
+        # Schema is: 'py_make_scanner' defines '_scan_once', which is referred
+        # by 'scan_once' which is result of 'py_make_scanner()' expression.
         orig_scanner = copy.deepcopy(json.scanner.py_make_scanner(self))
         try:
             cell = next(
@@ -135,8 +144,8 @@ class ASTDecoder(json.JSONDecoder):
             )
         except StopIteration:
             raise ValueError(
-                f'Failed to path {orig_scanner.__name__}, probably their internals'
-                f' has been changed'
+                f'Failed to path {orig_scanner.__name__}, '
+                f'probably the internals has been changed'
             )
 
         self.scan_once = _create_scanner_wrapper(cell.cell_contents)
@@ -161,7 +170,9 @@ def decode_document(content: Union[str, TextIO]) -> TextValues:
         )
 
     if not isinstance(tree.value, dict):
-        raise ParsingError(ValueError('document root item must be a mapping'), None)
+        raise ParsingError(
+            ValueError('document root item must be a mapping'), None
+        )
 
     return TextValues(_LocationFinder(tree), **tree.get_json_value())
 
@@ -170,7 +181,7 @@ class _LocationFinder:
     def __init__(self, root_item: ASTItem):
         self.root_item = root_item
 
-    def get_location(self, key: ModelLoc) -> TextLocation:
+    def get_location(self, key: JsonLocation) -> TextLocation:
         try:
             return self._get_location(key)
         except LocationLookupError as err:
@@ -178,12 +189,16 @@ class _LocationFinder:
             # with more specific error, so it might be helpful during debugging
             raise KeyError(key) from err
 
-    def _get_location(self, key: ModelLoc) -> TextLocation:
+    def _get_location(self, key: JsonLocation) -> TextLocation:
         curr_item = self.root_item
         for i, key_part in enumerate(key):
-            if isinstance(key_part, int) and not isinstance(curr_item.value, list):
+            if isinstance(key_part, int) and not isinstance(
+                curr_item.value, list
+            ):
                 raise ListExpectError(key, i)
-            elif isinstance(key_part, str) and not isinstance(curr_item.value, dict):
+            elif isinstance(key_part, str) and not isinstance(
+                curr_item.value, dict
+            ):
                 raise MappingExpectError(key, i)
 
             try:

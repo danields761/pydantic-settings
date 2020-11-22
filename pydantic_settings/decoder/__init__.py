@@ -1,14 +1,13 @@
 """
-*yaml*, *json* and *toml* decoders which also able to locate some value inside text
-or file
+*yaml*, *json* and *toml* decoders providing source value location.
 """
-from typing import Callable, Union, TextIO
+from typing import Callable, TextIO, Union
 
 from attr import dataclass
 
-from .common import (
-    LocationLookupError,
+from .common import (  # noqa: F401
     ListExpectError,
+    LocationLookupError,
     MappingExpectError,
     ParsingError,
     TextValues,
@@ -62,14 +61,13 @@ def _guard_import_error(
 
 def get_decoder(decoder_type: str) -> DecoderMeta:
     """
-    Get decoder for given type-hint. Decoders imported in lazy-style, allowing
-    you to mark *pyyaml* and *tomlkit* as optional dependencies.
+    Get decoder for given type-hint. Import decoders lazily to make
+    dependencies "soft-wired".
 
-    :param decoder_type: any kind of decoder hint: file extension, mime-type or common
-        name
+    :param decoder_type: any kind of decoder hint: file extension, mime-type or
+        common name
     :return: decoder metadata
     """
-    # i'am not really sure about possibility to guess mime-type for something like json
     if decoder_type in ('json', '.json', 'application/json'):
         return _guard_import_error(_get_json, 'json')
     if decoder_type in (

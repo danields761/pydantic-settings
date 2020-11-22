@@ -17,7 +17,6 @@ class _Writer(RstWriter):
 
 
 class _Translator(RstTranslator):
-
     def visit_reference(self, node):
         if len(node.children) == 1 and node.children[0].tagname == 'image':
             img_node = node.children[0]

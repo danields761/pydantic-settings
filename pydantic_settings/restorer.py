@@ -4,25 +4,31 @@ from functools import reduce
 from typing import (
     Any,
     Callable,
-    Mapping,
-    Optional,
     Dict,
+    Iterator,
     List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
     Tuple,
     Type,
-    cast,
-    Iterator,
     Union,
-    Sequence,
-    NamedTuple,
+    cast,
 )
+
 from attr import has as is_attr_class
 from pydantic import BaseModel
 
-from pydantic_settings.decoder import TextValues, ParsingError
-from pydantic_settings.types import JsonDict, AnyModelType, Json, ModelLoc, FlatMapLoc
+from pydantic_settings.decoder import ParsingError, TextValues
+from pydantic_settings.types import (
+    AnyModelType,
+    FlatMapLocation,
+    Json,
+    JsonDict,
+    JsonLocation,
+)
 from pydantic_settings.utils import get_union_subtypes
-
 
 _RecStrDictValue = Union['_RecStrDict', str]
 _RecStrDict = Dict[str, _RecStrDictValue]
@@ -39,7 +45,9 @@ def _noop(val: Any) -> Any:
 
 
 def _is_determined_complex_field(field_type: Any) -> bool:
-    """Returns flag indicates that field of given type have known set of child fields"""
+    """
+    Is field of given type have determined set of fields.
+    """
     return (
         is_attr_class(field_type)
         or is_dataclass(field_type)
@@ -58,7 +66,10 @@ def _estimate_field_complexity(field_type: Any) -> Tuple[bool, bool]:
     else:
         return reduce(
             lambda prev, item: (prev[0] or item, prev[1] and item),
-            (_is_determined_complex_field(subtype) for subtype in union_subtypes),
+            (
+                _is_determined_complex_field(subtype)
+                for subtype in union_subtypes
+            ),
             (False, True),
         )
 
@@ -102,10 +113,15 @@ def _traveler(
         new_prefix = f'{prefix}_{upper_field_name}'
         new_loc = loc + (field_name,)
         is_complex, is_only_complex = _estimate_field_complexity(field_type)
-        yield new_prefix, _FieldLocDescription(new_loc, is_complex, is_only_complex)
+        yield new_prefix, _FieldLocDescription(
+            new_loc, is_complex, is_only_complex
+        )
         if is_complex:
             yield from _traveler(
-                cast(AnyModelType, field_type), new_prefix, new_loc, case_reducer
+                cast(AnyModelType, field_type),
+                new_prefix,
+                new_loc,
+                case_reducer,
             )
 
 
@@ -120,7 +136,7 @@ class FlatMapValues(Dict[str, Json]):
 
     def __init__(
         self,
-        restored_env_values: Dict[ModelLoc, str],
+        restored_env_values: Dict[JsonLocation, str],
         restored_text_values: Dict[str, Union[TextValues, Dict]],
         **values: Json,
     ):
@@ -128,7 +144,7 @@ class FlatMapValues(Dict[str, Json]):
         self.restored_env_values = restored_env_values
         self.restored_text_values = restored_text_values
 
-    def get_location(self, val_loc: ModelLoc) -> FlatMapLoc:
+    def get_location(self, val_loc: JsonLocation) -> FlatMapLocation:
         """
         Maps model location to flat-mapping location, preserving original case
 
@@ -141,7 +157,7 @@ class FlatMapValues(Dict[str, Json]):
         except KeyError:
             raise KeyError(val_loc)
 
-    def _get_location(self, val_loc: ModelLoc) -> FlatMapLoc:
+    def _get_location(self, val_loc: JsonLocation) -> FlatMapLocation:
         try:
             return self.restored_env_values[val_loc], None
         except KeyError:
@@ -166,9 +182,7 @@ class FlatMapValues(Dict[str, Json]):
 
 
 class InvalidAssignError(ValueError):
-    """
-    Describes error occurrence and it location while applying some flat value
-    """
+    """Value applying error."""
 
     def __init__(self, loc: Optional[Sequence[str]], key: str):
         self.loc = loc
@@ -176,36 +190,16 @@ class InvalidAssignError(ValueError):
 
 
 class CannotParseValueError(InvalidAssignError):
-    """Value provided by `key` expected to be parsable for `loc`"""
-
-    pass
+    """Cannot parse value."""
 
 
 class AssignBeyondSimpleValueError(InvalidAssignError):
-    """
-    Signals that some value arrives for some deep location after a simple value for
-    this location parent, e.g. that sequence of items
-    :code:`[('FOO_BAR', 1), ('FOO_BAR_BAZ', 2')]` will cause
-    `AssignBeyondSimpleValueError` error.
-    """
-
-    pass
+    """Assigning value deeper then previous simple value is forbidden."""
 
 
 class ModelShapeRestorer(object):
     """
-    Restores flattened mapping to a model shape for a flat-map where keys satisfies
-    that rule:
-
-    .. code-block:: python
-
-        def get_flat_map_key(prefix, loc):
-            return prefix + '_' + '_'.join(str(part) for part in loc)
-
-    Where `prefix` - some arbitrary prefix, mostly aimed to separate different
-    namespaces, `loc` - a sequence of keys and indexes, by which desired value may be
-    addressed inside model and her nested fields. Also there is possibility to make
-    flat-map key case insensitive.
+    Restores flat-mapping into JSON document of known shape.
 
     Currently, setting nested a value inside of any sequence isn't supported.
     """
@@ -237,7 +231,7 @@ class ModelShapeRestorer(object):
     ) -> Tuple['FlatMapValues', Optional[Sequence[InvalidAssignError]]]:
         errs: List[InvalidAssignError] = []
         target: Dict[str, Json] = {}
-        consumed_envs: Dict[ModelLoc, str] = {}
+        consumed_envs: Dict[JsonLocation, str] = {}
 
         def default_dict_factory():
             return defaultdict(default_dict_factory)
@@ -257,9 +251,13 @@ class ModelShapeRestorer(object):
             if is_complex or is_only_complex:
                 try:
                     val = self._dead_end_resolver(val)
-                    assert isinstance(val, TextValues), 'Check is correct decoder used'
+                    assert isinstance(
+                        val, TextValues
+                    ), 'Check is correct decoder used'
                     reduce(
-                        lambda curr, item: curr[item], path[:-1], consumed_text_vals
+                        lambda curr, item: curr[item],
+                        path[:-1],
+                        consumed_text_vals,
                     )[path[-1]] = (orig_key, val)
                 except ParsingError as err:
                     if is_only_complex:
@@ -279,7 +277,10 @@ class ModelShapeRestorer(object):
 
 
 def _apply_path_value(
-    root: JsonDict, path: Sequence[str], orig_key: str, value: Union[str, JsonDict]
+    root: JsonDict,
+    path: Sequence[str],
+    orig_key: str,
+    value: Union[str, JsonDict],
 ):
     curr_segment: Any = root
     for path_part in path[:-1]:

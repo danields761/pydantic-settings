@@ -1,24 +1,25 @@
 import io
-from typing import Union, TextIO
+from typing import TextIO, Union
 
 import yaml
 
-from pydantic_settings.types import ModelLoc
+from pydantic_settings.types import JsonLocation
+
+from .. import TextLocation
 from .common import (
+    ListExpectError,
     LocationLookupError,
     MappingExpectError,
-    ListExpectError,
-    TextValues,
     ParsingError,
+    TextValues,
 )
-from .. import TextLocation
 
 
 class _LocationFinder:
     def __init__(self, root_node: yaml.Node):
         self._node = root_node
 
-    def get_location(self, key: ModelLoc) -> TextLocation:
+    def get_location(self, key: JsonLocation) -> TextLocation:
         try:
             node = self._lookup_node_by_loc(key)
         except LocationLookupError as err:
@@ -33,7 +34,7 @@ class _LocationFinder:
             node.end_mark.pointer,
         )
 
-    def _lookup_node_by_loc(self, key: ModelLoc) -> yaml.Node:
+    def _lookup_node_by_loc(self, key: JsonLocation) -> yaml.Node:
         curr_node = self._node
         if curr_node is None:
             raise LocationLookupError(key, -1)
@@ -94,6 +95,8 @@ def decode_document(
     if values is None:
         values = {}
     if not isinstance(values, dict):
-        raise ParsingError(ValueError('document root item must be a mapping'), None)
+        raise ParsingError(
+            ValueError('document root item must be a mapping'), None
+        )
 
     return TextValues(_LocationFinder(root_node), **values)

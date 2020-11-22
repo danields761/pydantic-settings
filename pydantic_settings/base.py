@@ -1,4 +1,4 @@
-from typing import Any, Type, cast, Mapping, TypeVar, ClassVar
+from typing import Any, ClassVar, Mapping, Type, TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
 
@@ -8,19 +8,19 @@ from pydantic_settings.errors import ExtendedErrorWrapper, with_errs_locations
 from pydantic_settings.restorer import ModelShapeRestorer
 from pydantic_settings.utils import deep_merge_mappings
 
-
-T = TypeVar('T', bound='SettingsModel')
+T = TypeVar('T', bound='BaseSettingsModel')
 
 
 class BaseSettingsModel(BaseModel):
     """
     Thin wrapper which combines :py:class:`pydantic.BaseModel` and
-    :py:class:`.ModelShapeRestorer` for mapping env variables onto this model.
+    :py:class:`.ModelShapeRestorer`.
     """
 
     class Config:
         """
-        Model behaviour configured with `Config` namespace traditionally for *pydantic*.
+        Model behaviour configured with `Config` namespace traditionally for
+        *pydantic*.
         """
 
         env_prefix: str = 'APP'
@@ -32,7 +32,7 @@ class BaseSettingsModel(BaseModel):
 
         env_case_sensitive: bool = False
         """
-        Whether :py:class:`.ModelShapeRestorer` 
+        Whether :py:class:`.ModelShapeRestorer`
         will take environment variable case into account.
         """
 
@@ -40,13 +40,13 @@ class BaseSettingsModel(BaseModel):
         """
         Used to decode bunch of values for some nested namespace. Assume some
         nested namespace with 'foo' location and shape like
-        :code:`{"bar": 1, "baz": "val"}`, then you able to set whole value with env 
-        variable :command:`export APP_FOO='{"bar": 2, "baz": "new_val"}'`.
+        :code:`{"bar": 1, "baz": "val"}`, then you able to set whole value with
+        env variable :command:`export APP_FOO='{"bar": 2, "baz": "new_val"}'`.
          """
 
         build_attr_docs: bool = True
         """
-        Lookup and set model fields descriptions taken from attributes docstrings. Look
+        Set model field descriptions taken from attributes docstrings. Read
         :py:func:`.apply_attributes_docs` for further details.
         """
 
@@ -76,21 +76,23 @@ class BaseSettingsModel(BaseModel):
         environ: Mapping[str, str],
         *,
         ignore_restore_errs: bool = True,
-        **vals: Any
+        **values: Any
     ) -> T:
         """
         Build model instance from given values and environ.
 
-        :param environ: environment-like flat mapping, take precedence over values
-        :param ignore_restore_errs: ignore errors happened while restoring flat-mapping
-        :param vals: values
+        :param environ: environment-like flat mapping, take precedence over
+            values
+        :param ignore_restore_errs: ignore errors happened while restoring
+            flat-mapping
+        :param values: values
         :raises ValidationError: in case of failure
         :return: model instance
         """
         env_vars_applied, env_apply_errs = cls.shape_restorer.restore(environ)
+        validation_err = None
         try:
-            res = cls(**deep_merge_mappings(env_vars_applied, vals))
-            validation_err = None
+            res = cls(**deep_merge_mappings(env_vars_applied, values))
         except ValidationError as err:
             res = None
             validation_err = err

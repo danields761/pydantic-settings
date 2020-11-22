@@ -1,11 +1,15 @@
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
 
 from pydantic import BaseModel
 from pytest import mark
 
 from pydantic_settings import TextLocation
 from pydantic_settings.decoder.json import decode_document
-from pydantic_settings.restorer import _build_model_flat_map, ModelShapeRestorer
+from pydantic_settings.restorer import (
+    ModelShapeRestorer,
+    _build_model_flat_map,
+)
+
 from .conftest import Model1, Model4, Model5, Model6
 
 
@@ -36,7 +40,11 @@ def test_with_complex_types():
         't_models_union_foo': (('models_union', 'foo'), False, False),
         't_models_union_bar': (('models_union', 'bar'), False, False),
         't_models_union_list': (('models_union', 'list'), False, False),
-        't_model_union_with_simple': (('model_union_with_simple',), True, False),
+        't_model_union_with_simple': (
+            ('model_union_with_simple',),
+            True,
+            False,
+        ),
         't_model_union_with_simple_foo': (
             ('model_union_with_simple', 'foo'),
             False,
@@ -83,13 +91,23 @@ def test_complex_nested_models(model_cls):
                 ('foo', 'bar'): (
                     'test_foo',
                     TextLocation(
-                        line=1, col=9, end_line=1, end_col=15, pos=9, end_pos=14
+                        line=1,
+                        col=9,
+                        end_line=1,
+                        end_col=15,
+                        pos=9,
+                        end_pos=14,
                     ),
                 ),
                 ('foo', 'baz'): (
                     'test_foo',
                     TextLocation(
-                        line=1, col=24, end_line=1, end_col=30, pos=24, end_pos=29
+                        line=1,
+                        col=24,
+                        end_line=1,
+                        end_col=30,
+                        pos=24,
+                        end_pos=29,
                     ),
                 ),
             },
@@ -126,13 +144,23 @@ def test_complex_nested_models(model_cls):
                 ('baz', 'bam', 'foo'): (
                     'test_baz_bam',
                     TextLocation(
-                        line=1, col=9, end_line=1, end_col=15, pos=9, end_pos=14
+                        line=1,
+                        col=9,
+                        end_line=1,
+                        end_col=15,
+                        pos=9,
+                        end_pos=14,
                     ),
                 ),
                 ('baz', 'bam', 'bar'): (
                     'test_baz_bam',
                     TextLocation(
-                        line=1, col=24, end_line=1, end_col=30, pos=24, end_pos=29
+                        line=1,
+                        col=24,
+                        end_line=1,
+                        end_col=30,
+                        pos=24,
+                        end_pos=29,
                     ),
                 ),
             },
@@ -145,7 +173,12 @@ def test_complex_nested_models(model_cls):
                 ('baz', 'bam', 'foo'): (
                     'test_baz',
                     TextLocation(
-                        line=1, col=17, end_line=1, end_col=23, pos=17, end_pos=22
+                        line=1,
+                        col=17,
+                        end_line=1,
+                        end_col=23,
+                        pos=17,
+                        end_pos=22,
                     ),
                 )
             },
@@ -157,7 +190,10 @@ def test_complex_nested_models(model_cls):
                 'test_baz_bam_bar': 'VAL2',
                 'test_baf_foo': 'VAL3',
             },
-            {'baz': {'bam': {'foo': 'VAL1', 'bar': 'VAL2'}}, 'baf': {'foo': 'VAL3'}},
+            {
+                'baz': {'bam': {'foo': 'VAL1', 'bar': 'VAL2'}},
+                'baf': {'foo': 'VAL3'},
+            },
             {
                 ('baz', 'bam', 'foo'): ('test_baz_bam_foo', None),
                 ('baz', 'bam', 'bar'): ('test_baz_bam_bar', None),

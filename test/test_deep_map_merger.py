@@ -4,7 +4,9 @@ from pydantic_settings.utils import deep_merge_mappings
 
 
 def test_simple_chain_map_possibilities():
-    m = deep_merge_mappings(deep_merge_mappings({'a': 1}, {'a': 2, 'b': 2}), {'c': 3})
+    m = deep_merge_mappings(
+        deep_merge_mappings({'a': 1}, {'a': 2, 'b': 2}), {'c': 3}
+    )
     assert m['a'] == 1
     assert m['b'] == 2
     assert m['c'] == 3

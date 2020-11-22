@@ -18,15 +18,21 @@ from .test_settings_base import Model1
                     ExtendedErrorWrapper(
                         FloatError(),
                         loc=('foo', 'bar'),
-                        source_loc=('T_FOO_BAR', TextLocation(1, 1, 1, 1, 10, 20)),
+                        source_loc=(
+                            'T_FOO_BAR',
+                            TextLocation(1, 1, 1, 1, 10, 20),
+                        ),
                     )
                 ],
                 Model1,
                 None,
             ),
-            """1 validation error for Model1 (in-memory buffer and environment variables):
-foo -> bar from env "T_FOO_BAR" at 10:20
-  value is not a valid float (type=type_error.float)""",
+            (
+                '1 validation error for Model1 '
+                '(in-memory buffer and environment variables):\n'
+                'foo -> bar from env "T_FOO_BAR" at 10:20\n'
+                '\tvalue is not a valid float (type=type_error.float)'
+            ),
         ),
         (
             (
@@ -40,9 +46,12 @@ foo -> bar from env "T_FOO_BAR" at 10:20
                 Model1,
                 Path('/path/to/conf/file.json'),
             ),
-            """1 validation error for Model1 (configuration file at "/path/to/conf/file.json"):
-foo -> bar from file at 1:4
-  value is not a valid float (type=type_error.float)""",
+            (
+                '1 validation error for Model1 '
+                '(configuration file at "/path/to/conf/file.json"):\n'
+                'foo -> bar from file at 1:4\n'
+                '\tvalue is not a valid float (type=type_error.float)'
+            ),
         ),
     ],
 )

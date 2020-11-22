@@ -7,6 +7,8 @@ class Foo(BaseModel):
 
 
 assert (
-    load_settings(Foo, load_env=True, env_prefix='EX', environ={'EX_VAL': '10'}).val
+    load_settings(
+        Foo, load_env=True, env_prefix='EX', environ={'EX_VAL': '10'}
+    ).val
     == 10
 )

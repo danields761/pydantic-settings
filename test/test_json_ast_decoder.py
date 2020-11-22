@@ -3,7 +3,6 @@ from pytest import mark
 import pydantic_settings.decoder.json
 from pydantic_settings.decoder import json
 
-
 _create = pydantic_settings.decoder.json.ASTItem.create
 
 
@@ -49,7 +48,11 @@ JSON_LIST_DICT = """[
                         5,
                         4,
                         6,
-                        {'key': _create(3, 16, 3, 21, 12345, pos=23, end_pos=28)},
+                        {
+                            'key': _create(
+                                3, 16, 3, 21, 12345, pos=23, end_pos=28
+                            )
+                        },
                         pos=7,
                         end_pos=34,
                     )
@@ -92,7 +95,11 @@ JSON_LIST_DICT = """[
                         2,
                         1,
                         16,
-                        {'key': _create(1, 10, 1, 15, 12345, pos=9, end_pos=14)},
+                        {
+                            'key': _create(
+                                1, 10, 1, 15, 12345, pos=9, end_pos=14
+                            )
+                        },
                         pos=2,
                         end_pos=15,
                     )

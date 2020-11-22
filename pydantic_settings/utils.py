@@ -1,7 +1,6 @@
-from typing import Mapping, Dict, Type, Tuple, List, Union, TypeVar
+from typing import Dict, Mapping, Tuple, Type, Union
 
 from pydantic_settings.types import Json
-
 
 _sentinel = object()
 
